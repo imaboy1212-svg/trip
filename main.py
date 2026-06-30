@@ -2106,6 +2106,45 @@ def run():
             except Exception as e:
                 logger.error(f"'{hidden_cand}' 예외: {e}")
 
+        # Special Destinations 전체 실패 시 — 6대륙 중 랜덤으로 재시도
+        if not travel_data_hidden and continent == "Special Destinations":
+            import random
+            fallback_continents = [c for c in _ROTATION_ORDER if c != "Special Destinations"]
+            random.shuffle(fallback_continents)
+            logger.warning("Special Destinations 전체 실패 — 6대륙 랜덤 폴백 시작")
+            send_telegram("Special Destinations 데이터 부족 — 6대륙 랜덤으로 재시도")
+            for fb_continent in fallback_continents:
+                fb_destinations = fetch_trending_destinations(published=published_set)
+                fb_pairs = []
+                for d in fb_destinations:
+                    if '|' in d:
+                        parts = [p.strip() for p in d.split('|', 1)]
+                        if len(parts) == 2:
+                            fb_pairs.append((parts[0], parts[1]))
+                if not fb_pairs:
+                    fb_pairs = [(d, d) for d in fb_destinations]
+                for famous_cand, hidden_cand in fb_pairs:
+                    try:
+                        td_hidden = fetch_travel_data(hidden_cand)
+                        try:
+                            td_famous = fetch_travel_data(famous_cand)
+                        except Exception:
+                            td_famous = {"destination": famous_cand, "overview": "", "attractions": "",
+                                         "food": "", "transport": "", "accommodation": "", "tips": "", "sources": []}
+                        travel_data_famous = td_famous
+                        travel_data_hidden = td_hidden
+                        famous   = famous_cand
+                        selected = hidden_cand
+                        continent = fb_continent
+                        logger.info(f"폴백 성공: {fb_continent} — {famous_cand} | {hidden_cand}")
+                        break
+                    except ValueError as e:
+                        logger.warning(f"폴백 '{hidden_cand}' 건너뜀: {e}")
+                    except Exception as e:
+                        logger.error(f"폴백 '{hidden_cand}' 예외: {e}")
+                if travel_data_hidden:
+                    break
+
         if not travel_data_hidden:
             msg = "모든 후보 여행지 데이터 수집 실패"
             logger.error(msg)
