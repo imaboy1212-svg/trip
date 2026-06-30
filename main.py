@@ -483,6 +483,34 @@ def fetch_travel_data(destination: str) -> Dict:
 
         total = sum(len(v) for v in data.values() if isinstance(v, str))
         span.set_attribute("data.total_chars", total)
+
+        # Gemini 폴백 — wikitravel/Bing 모두 실패 시 Gemini로 기본 정보 생성
+        if total < 300:
+            logger.warning(f"'{destination}' 웹 데이터 부족 ({total}자) — Gemini 폴백 사용")
+            try:
+                prompt = (
+                    f"You are a travel expert. Provide factual travel information about '{destination}' "
+                    f"in Korean for a travel blog. Include:\n"
+                    f"- Overview (2-3 sentences)\n"
+                    f"- Top 3 attractions with brief descriptions\n"
+                    f"- Local food specialties\n"
+                    f"- How to get there and get around\n"
+                    f"- Accommodation options\n"
+                    f"- Practical travel tips\n"
+                    f"Be factual and specific. No markdown symbols."
+                )
+                resp = gemini.generate_content(prompt)
+                gemini_text = resp.text.strip()
+                if len(gemini_text) > 200:
+                    data["overview"] = gemini_text[:3000]
+                    data["attractions"] = gemini_text[:1500]
+                    data["sources"].append("Gemini AI")
+                    total = sum(len(v) for v in data.values() if isinstance(v, str))
+                    logger.info(f"'{destination}' Gemini 폴백 완료 ({total}자)")
+            except Exception as e:
+                logger.warning(f"Gemini 폴백 실패: {e}")
+
+        total = sum(len(v) for v in data.values() if isinstance(v, str))
         if total < 300:
             raise ValueError(f"'{destination}' 데이터 불충분 ({total}자)")
         logger.info(f"'{destination}' 데이터 수집 완료 ({total}자)")
