@@ -531,34 +531,58 @@ def fetch_travel_data(destination: str) -> Dict:
 _PHOTO_QUERIES: Dict[str, List[str]] = {
     "featured":   [
         "{d} aerial panorama landscape",
-        "{d} cityscape skyline",
+        "{d} cityscape skyline golden hour",
         "{d} scenic view travel photography",
+        "{d} breathtaking vista overview",
+        "{d} travel destination beauty",
+        "{d} iconic view sunrise sunset",
+        "{d} landscape nature",
+        "{d} tourism attraction overview",
     ],
     "portrait":   [
         "{d} local people culture portrait",
         "{d} traditional culture lifestyle",
         "{d} community life people",
+        "{d} festival celebration tradition",
+        "{d} artisan craftsman local",
+        "{d} market bazaar vendors",
+        "{d} cultural heritage people",
     ],
     "attraction": [
         "{d} famous landmark heritage",
         "{d} historic monument architecture",
         "{d} UNESCO world heritage site",
+        "{d} tourist attraction sightseeing",
+        "{d} ancient ruins historical",
+        "{d} palace temple cathedral",
+        "{d} iconic building structure",
+        "{d} museum gallery cultural site",
     ],
     "food":       [
         "{d} traditional food dish",
         "{d} local cuisine restaurant",
-        "{d} street food",
-        "{d} foods",
+        "{d} street food market",
+        "{d} authentic food culture",
+        "{d} chef cooking kitchen",
+        "{d} dining experience meal",
+        "{d} dessert sweet local",
     ],
     "transport":  [
         "{d} airport train station transportation",
         "{d} public transit city transport",
         "{d} scenic route road journey",
+        "{d} taxi bus local transport",
+        "{d} ferry boat harbor port",
+        "{d} city street commute",
     ],
     "tips":       [
         "{d} nature wilderness landscape",
         "{d} outdoor adventure travel",
         "{d} scenic hiking trail",
+        "{d} weather season climate",
+        "{d} accommodation hotel resort",
+        "{d} shopping district market",
+        "{d} night life entertainment",
     ],
 }
 
@@ -665,7 +689,7 @@ def _serpapi_maps_photos(destination: str, used_urls: set) -> Optional[bytes]:
         photos = photos_resp.json().get("photos", [])
         import random
         random.shuffle(photos)
-        for photo in photos[:10]:
+        for photo in photos[:20]:
             url = photo.get("image", "") or photo.get("thumbnail", "")
             if not url or not url.startswith("http"):
                 continue
@@ -816,7 +840,9 @@ def _google_places_photos(destination: str, used_urls: set) -> Optional[bytes]:
                 )
                 if detail_resp.status_code == 200:
                     photos = detail_resp.json().get("result", {}).get("photos", [])
-        for photo in photos[:5]:
+        import random
+        random.shuffle(photos)
+        for photo in photos[:10]:
             ref = photo.get("photo_reference", "")
             if not ref:
                 continue
@@ -977,7 +1003,7 @@ def _pexels_search(query: str, orientation: str, used_urls: set, per_page: int =
         return None
     try:
         import random
-        page = random.randint(1, 3)
+        page = random.randint(1, 6)
         resp = requests.get(
             "https://api.pexels.com/v1/search",
             params={
@@ -1201,62 +1227,82 @@ def fetch_travel_image(
             templates = _PHOTO_QUERIES.get(section, _PHOTO_QUERIES["featured"])
             queries = [t.replace("{d}", destination) for t in templates]
 
-        for q in queries:
-            # 1순위: Unsplash (여행 전문 큐레이션, 가장 정확)
-            result = _unsplash_search(q, orientation, used_urls)
-            if result:
-                span.set_attribute("source", "unsplash")
-                span.set_attribute("found_query", q)
-                return result
-            # 2순위: Pexels
+        import random as _rnd
+
+        # 섹션별 소스 순서를 랜덤화해서 다양성 확보
+        # 키 있는 소스들을 앞에 배치 + 셔플
+        api_sources_with_key = []
+        if SERPAPI_KEY:
+            api_sources_with_key.append("serpapi")
+        if GOOGLE_MAPS_KEY:
+            api_sources_with_key.append("google_places")
+        _rnd.shuffle(api_sources_with_key)
+
+        # 각 쿼리마다 순서를 다르게
+        shuffled_queries = queries[:]
+        _rnd.shuffle(shuffled_queries)
+
+        for q in shuffled_queries:
+            # Pexels API (키 있을 때)
             result = _pexels_search(q, orientation, used_urls)
             if result:
                 span.set_attribute("source", "pexels")
                 span.set_attribute("found_query", q)
                 return result
-            # 3순위: Bing Image Search API (키 있을 때만)
-            result = _bing_api_search(q, orientation, used_urls)
-            if result:
-                span.set_attribute("source", "bing_api")
-                span.set_attribute("found_query", q)
-                return result
-            # 4순위: Pixabay API (무료 키)
+            # Pixabay API (무료 키)
             result = _pixabay_search(q, used_urls)
-
             if result:
                 span.set_attribute("source", "pixabay")
                 span.set_attribute("found_query", q)
                 return result
-            # 5순위: Openverse (API 키 불필요)
+            # Openverse (API 키 불필요)
             result = _openverse_search(q, used_urls)
             if result:
                 span.set_attribute("source", "openverse")
                 span.set_attribute("found_query", q)
                 return result
-            # 6순위: Pexels 웹 스크래핑 (API 키 불필요)
-            result = _pexels_scrape(q, used_urls)
-            if result:
-                span.set_attribute("source", "pexels_scrape")
-                span.set_attribute("found_query", q)
-                return result
-            # 7순위: Wikimedia Commons (API 키 불필요)
+            # Wikimedia Commons (API 키 불필요)
             result = _wikimedia_search(q, used_urls)
             if result:
                 span.set_attribute("source", "wikimedia")
                 span.set_attribute("found_query", q)
                 return result
+            # Unsplash (키 있을 때)
+            result = _unsplash_search(q, orientation, used_urls)
+            if result:
+                span.set_attribute("source", "unsplash")
+                span.set_attribute("found_query", q)
+                return result
+            # Bing (키 있을 때)
+            result = _bing_api_search(q, orientation, used_urls)
+            if result:
+                span.set_attribute("source", "bing_api")
+                span.set_attribute("found_query", q)
+                return result
 
-        # SerpApi Google Maps Photos (SERPAPI_KEY 있을 때)
-        result = _serpapi_maps_photos(destination, used_urls)
-        if result:
-            span.set_attribute("source", "serpapi_maps")
-            return result
+        # 키 있는 고품질 소스들 (랜덤 순서)
+        for src in api_sources_with_key:
+            if src == "serpapi":
+                result = _serpapi_maps_photos(destination, used_urls)
+                if result:
+                    span.set_attribute("source", "serpapi_maps")
+                    return result
+            elif src == "google_places":
+                result = _google_places_photos(destination, used_urls)
+                if result:
+                    span.set_attribute("source", "google_maps")
+                    return result
 
-        # Google Maps Places API (GOOGLE_MAPS_KEY 있을 때)
-        result = _google_places_photos(destination, used_urls)
-        if result:
-            span.set_attribute("source", "google_maps")
-            return result
+        # 나머지 키 있는 소스 중 아직 안 쓴 것
+        for src in api_sources_with_key:
+            pass  # already tried above
+
+        # Pexels 웹 스크래핑 폴백
+        for q in shuffled_queries[:3]:
+            result = _pexels_scrape(q, used_urls)
+            if result:
+                span.set_attribute("source", "pexels_scrape")
+                return result
 
         # 최후 폴백: Wikipedia 대표 이미지
         result = _wikipedia_main_image(destination, used_urls)
