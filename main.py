@@ -52,6 +52,7 @@ COUPANG_LINK        = os.getenv("COUPANG_PARTNERS_URL", "")
 OTLP_ENDPOINT       = os.getenv("OTLP_ENDPOINT", "")
 BING_IMAGE_KEY      = os.getenv("BING_IMAGE_SEARCH_KEY", "")
 GOOGLE_MAPS_KEY     = os.getenv("GOOGLE_MAPS_KEY", "")
+PIXABAY_KEY         = os.getenv("PIXABAY_API_KEY", "")
 KLOOK_AFFILIATE_ID  = os.getenv("KLOOK_AFFILIATE_ID", "")
 GYG_PARTNER_ID      = os.getenv("GYG_PARTNER_ID", "")
 
@@ -622,6 +623,76 @@ def _fetch_url(url: str, used_urls: set, min_bytes: int = 40000) -> Optional[byt
         return None
 
 
+def _pixabay_search(query: str, used_urls: set) -> Optional[bytes]:
+    """Pixabay API — 무료 키 발급 가능 (pixabay.com/api/docs/)."""
+    if not PIXABAY_KEY:
+        return None
+    try:
+        import random
+        resp = requests.get(
+            "https://pixabay.com/api/",
+            params={
+                "key": PIXABAY_KEY,
+                "q": query,
+                "image_type": "photo",
+                "orientation": "horizontal",
+                "category": "travel",
+                "min_width": 800,
+                "per_page": 20,
+                "page": random.randint(1, 3),
+                "safesearch": "true",
+            },
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return None
+        hits = resp.json().get("hits", [])
+        random.shuffle(hits)
+        for hit in hits:
+            url = hit.get("largeImageURL") or hit.get("webformatURL", "")
+            if not url:
+                continue
+            data = _fetch_url(url, used_urls, min_bytes=20000)
+            if data:
+                logger.info(f"[Pixabay] {query[:40]} → {url[:60]}")
+                return data
+    except Exception as e:
+        logger.debug(f"Pixabay 오류 ({query[:30]}): {e}")
+    return None
+
+
+def _openverse_search(query: str, used_urls: set) -> Optional[bytes]:
+    """Openverse — WordPress 오픈 이미지 검색, API 키 불필요."""
+    try:
+        resp = requests.get(
+            "https://api.openverse.org/v1/images/",
+            params={
+                "q": query,
+                "license_type": "commercial,modification",
+                "page_size": 20,
+                "format": "json",
+            },
+            headers={"User-Agent": "trip-auto-publisher/1.0"},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return None
+        import random
+        results = resp.json().get("results", [])
+        random.shuffle(results)
+        for item in results:
+            url = item.get("url", "")
+            if not url or not url.startswith("http"):
+                continue
+            data = _fetch_url(url, used_urls, min_bytes=15000)
+            if data:
+                logger.info(f"[Openverse] {query[:40]} → {url[:60]}")
+                return data
+    except Exception as e:
+        logger.debug(f"Openverse 오류 ({query[:30]}): {e}")
+    return None
+
+
 def _pexels_scrape(query: str, used_urls: set) -> Optional[bytes]:
     """Pexels 웹 스크래핑 — API 키 불필요."""
     try:
@@ -1094,13 +1165,25 @@ def fetch_travel_image(
                 span.set_attribute("source", "bing_api")
                 span.set_attribute("found_query", q)
                 return result
-            # 4순위: Pexels 웹 스크래핑 (API 키 불필요)
+            # 4순위: Pixabay API (무료 키)
+            result = _pixabay_search(q, used_urls)
+            if result:
+                span.set_attribute("source", "pixabay")
+                span.set_attribute("found_query", q)
+                return result
+            # 5순위: Openverse (API 키 불필요)
+            result = _openverse_search(q, used_urls)
+            if result:
+                span.set_attribute("source", "openverse")
+                span.set_attribute("found_query", q)
+                return result
+            # 6순위: Pexels 웹 스크래핑 (API 키 불필요)
             result = _pexels_scrape(q, used_urls)
             if result:
                 span.set_attribute("source", "pexels_scrape")
                 span.set_attribute("found_query", q)
                 return result
-            # 5순위: Wikimedia Commons (API 키 불필요)
+            # 7순위: Wikimedia Commons (API 키 불필요)
             result = _wikimedia_search(q, used_urls)
             if result:
                 span.set_attribute("source", "wikimedia")
