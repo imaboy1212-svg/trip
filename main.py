@@ -621,6 +621,75 @@ def _fetch_url(url: str, used_urls: set, min_bytes: int = 40000) -> Optional[byt
         return None
 
 
+def _wikimedia_search(query: str, used_urls: set) -> Optional[bytes]:
+    """Wikimedia Commons — API 키 불필요, 무료 고화질 여행 사진."""
+    try:
+        resp = requests.get(
+            "https://commons.wikimedia.org/w/api.php",
+            params={
+                "action": "query",
+                "generator": "search",
+                "gsrsearch": f"File:{query}",
+                "gsrnamespace": 6,
+                "gsrlimit": 20,
+                "prop": "imageinfo",
+                "iiprop": "url|size|mime",
+                "iiurlwidth": 1200,
+                "format": "json",
+            },
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return None
+        pages = resp.json().get("query", {}).get("pages", {})
+        for page in pages.values():
+            ii = page.get("imageinfo", [{}])[0]
+            mime = ii.get("mime", "")
+            if "image" not in mime or "svg" in mime or "gif" in mime:
+                continue
+            url = ii.get("thumburl") or ii.get("url", "")
+            if not url:
+                continue
+            data = _fetch_url(url, used_urls, min_bytes=15000)
+            if data:
+                logger.info(f"[Wikimedia] {query[:40]} → {url[:60]}")
+                return data
+    except Exception as e:
+        logger.debug(f"Wikimedia 오류 ({query[:30]}): {e}")
+    return None
+
+
+def _wikipedia_main_image(destination: str, used_urls: set) -> Optional[bytes]:
+    """Wikipedia 대표 이미지 — 여행지 이름으로 직접 조회."""
+    try:
+        resp = requests.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action": "query",
+                "titles": destination,
+                "prop": "pageimages",
+                "pithumbsize": 1200,
+                "format": "json",
+            },
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return None
+        pages = resp.json().get("query", {}).get("pages", {})
+        for page in pages.values():
+            thumb = page.get("thumbnail", {})
+            url = thumb.get("source", "")
+            if not url:
+                continue
+            data = _fetch_url(url, used_urls, min_bytes=10000)
+            if data:
+                logger.info(f"[Wikipedia] {destination} → {url[:60]}")
+                return data
+    except Exception as e:
+        logger.debug(f"Wikipedia 이미지 오류 ({destination}): {e}")
+    return None
+
+
 def _bing_api_search(query: str, orientation: str, used_urls: set) -> Optional[bytes]:
     """Bing Image Search API (BING_IMAGE_SEARCH_KEY 설정 시 사용)."""
     if not BING_IMAGE_KEY:
@@ -939,6 +1008,18 @@ def fetch_travel_image(
                 span.set_attribute("source", "bing_api")
                 span.set_attribute("found_query", q)
                 return result
+            # 4순위: Wikimedia Commons (API 키 불필요)
+            result = _wikimedia_search(q, used_urls)
+            if result:
+                span.set_attribute("source", "wikimedia")
+                span.set_attribute("found_query", q)
+                return result
+
+        # 최후 폴백: Wikipedia 대표 이미지
+        result = _wikipedia_main_image(destination, used_urls)
+        if result:
+            span.set_attribute("source", "wikipedia")
+            return result
 
         logger.warning(f"[포토그래픽팀] 이미지 없음 — 패스 ({destination} / {section})")
         return None
