@@ -53,6 +53,7 @@ OTLP_ENDPOINT       = os.getenv("OTLP_ENDPOINT", "")
 BING_IMAGE_KEY      = os.getenv("BING_IMAGE_SEARCH_KEY", "")
 GOOGLE_MAPS_KEY     = os.getenv("GOOGLE_MAPS_KEY", "")
 PIXABAY_KEY         = os.getenv("PIXABAY_API_KEY", "")
+SERPAPI_KEY         = os.getenv("SERPAPI_KEY", "")
 KLOOK_AFFILIATE_ID  = os.getenv("KLOOK_AFFILIATE_ID", "")
 GYG_PARTNER_ID      = os.getenv("GYG_PARTNER_ID", "")
 
@@ -623,6 +624,60 @@ def _fetch_url(url: str, used_urls: set, min_bytes: int = 40000) -> Optional[byt
         return None
 
 
+def _serpapi_maps_photos(destination: str, used_urls: set) -> Optional[bytes]:
+    """SerpApi Google Maps Photos — 구글 지도 내 실사 사진 수집."""
+    if not SERPAPI_KEY:
+        return None
+    try:
+        # 1단계: Google Maps 검색으로 data_id 획득
+        maps_resp = requests.get(
+            "https://serpapi.com/search",
+            params={
+                "engine": "google_maps",
+                "q": destination,
+                "api_key": SERPAPI_KEY,
+                "hl": "en",
+            },
+            timeout=20,
+        )
+        if maps_resp.status_code != 200:
+            return None
+        local_results = maps_resp.json().get("local_results", [])
+        if not local_results:
+            return None
+        data_id = local_results[0].get("data_id", "")
+        if not data_id:
+            return None
+
+        # 2단계: data_id로 Google Maps 사진 조회
+        photos_resp = requests.get(
+            "https://serpapi.com/search",
+            params={
+                "engine": "google_maps_photos",
+                "data_id": data_id,
+                "api_key": SERPAPI_KEY,
+                "hl": "en",
+            },
+            timeout=20,
+        )
+        if photos_resp.status_code != 200:
+            return None
+        photos = photos_resp.json().get("photos", [])
+        import random
+        random.shuffle(photos)
+        for photo in photos[:10]:
+            url = photo.get("image", "") or photo.get("thumbnail", "")
+            if not url or not url.startswith("http"):
+                continue
+            data = _fetch_url(url, used_urls, min_bytes=15000)
+            if data:
+                logger.info(f"[SerpApi GoogleMaps] {destination} → {url[:60]}")
+                return data
+    except Exception as e:
+        logger.debug(f"SerpApi Maps Photos 오류 ({destination}): {e}")
+    return None
+
+
 def _pixabay_search(query: str, used_urls: set) -> Optional[bytes]:
     """Pixabay API — 무료 키 발급 가능 (pixabay.com/api/docs/)."""
     if not PIXABAY_KEY:
@@ -1167,6 +1222,7 @@ def fetch_travel_image(
                 return result
             # 4순위: Pixabay API (무료 키)
             result = _pixabay_search(q, used_urls)
+
             if result:
                 span.set_attribute("source", "pixabay")
                 span.set_attribute("found_query", q)
@@ -1190,7 +1246,13 @@ def fetch_travel_image(
                 span.set_attribute("found_query", q)
                 return result
 
-        # 6순위: Google Maps Places 사진 (GOOGLE_MAPS_KEY 있을 때)
+        # SerpApi Google Maps Photos (SERPAPI_KEY 있을 때)
+        result = _serpapi_maps_photos(destination, used_urls)
+        if result:
+            span.set_attribute("source", "serpapi_maps")
+            return result
+
+        # Google Maps Places API (GOOGLE_MAPS_KEY 있을 때)
         result = _google_places_photos(destination, used_urls)
         if result:
             span.set_attribute("source", "google_maps")
