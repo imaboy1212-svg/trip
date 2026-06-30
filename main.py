@@ -51,6 +51,7 @@ PINTEREST_BOARD_ID  = os.getenv("PINTEREST_BOARD_ID")
 COUPANG_LINK        = os.getenv("COUPANG_PARTNERS_URL", "")
 OTLP_ENDPOINT       = os.getenv("OTLP_ENDPOINT", "")
 BING_IMAGE_KEY      = os.getenv("BING_IMAGE_SEARCH_KEY", "")
+GOOGLE_MAPS_KEY     = os.getenv("GOOGLE_MAPS_KEY", "")
 KLOOK_AFFILIATE_ID  = os.getenv("KLOOK_AFFILIATE_ID", "")
 GYG_PARTNER_ID      = os.getenv("GYG_PARTNER_ID", "")
 
@@ -621,6 +622,91 @@ def _fetch_url(url: str, used_urls: set, min_bytes: int = 40000) -> Optional[byt
         return None
 
 
+def _pexels_scrape(query: str, used_urls: set) -> Optional[bytes]:
+    """Pexels 웹 스크래핑 — API 키 불필요."""
+    try:
+        url = f"https://www.pexels.com/search/{quote(query.replace(' ', '-'))}/"
+        resp = requests.get(url, headers=_HDRS, timeout=15)
+        if resp.status_code != 200:
+            return None
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for img in soup.select("article img, [class*='photo'] img, [class*='Photo'] img"):
+            srcset = img.get("srcset") or img.get("data-srcset") or ""
+            img_url = ""
+            if srcset:
+                candidates = []
+                for part in srcset.split(","):
+                    tokens = part.strip().split()
+                    if tokens:
+                        w = int(tokens[1].rstrip("w")) if len(tokens) > 1 and tokens[1].endswith("w") else 0
+                        candidates.append((w, tokens[0]))
+                if candidates:
+                    img_url = max(candidates, key=lambda x: x[0])[1]
+            if not img_url:
+                img_url = img.get("src") or img.get("data-src") or ""
+            if not img_url or not img_url.startswith("http"):
+                continue
+            if any(x in img_url.lower() for x in ["avatar", "logo", "icon", "1x1"]):
+                continue
+            data = _fetch_url(img_url, used_urls, min_bytes=20000)
+            if data:
+                logger.info(f"[Pexels스크래핑] {query[:40]} → {img_url[:60]}")
+                return data
+    except Exception as e:
+        logger.debug(f"Pexels 스크래핑 오류 ({query[:30]}): {e}")
+    return None
+
+
+def _google_places_photos(destination: str, used_urls: set) -> Optional[bytes]:
+    """Google Maps Places API 사진 — GOOGLE_MAPS_KEY 설정 시 사용."""
+    if not GOOGLE_MAPS_KEY:
+        return None
+    try:
+        # 1단계: 장소 검색으로 place_id + 사진 레퍼런스 획득
+        find_resp = requests.get(
+            "https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
+            params={
+                "input": destination,
+                "inputtype": "textquery",
+                "fields": "place_id,photos",
+                "key": GOOGLE_MAPS_KEY,
+            },
+            timeout=15,
+        )
+        if find_resp.status_code != 200:
+            return None
+        candidates = find_resp.json().get("candidates", [])
+        if not candidates:
+            return None
+        photos = candidates[0].get("photos", [])
+        if not photos:
+            # 2단계: place_id로 상세 조회
+            place_id = candidates[0].get("place_id", "")
+            if place_id:
+                detail_resp = requests.get(
+                    "https://maps.googleapis.com/maps/api/place/details/json",
+                    params={"place_id": place_id, "fields": "photos", "key": GOOGLE_MAPS_KEY},
+                    timeout=15,
+                )
+                if detail_resp.status_code == 200:
+                    photos = detail_resp.json().get("result", {}).get("photos", [])
+        for photo in photos[:5]:
+            ref = photo.get("photo_reference", "")
+            if not ref:
+                continue
+            img_url = (
+                f"https://maps.googleapis.com/maps/api/place/photo"
+                f"?maxwidth=1200&photoreference={ref}&key={GOOGLE_MAPS_KEY}"
+            )
+            data = _fetch_url(img_url, used_urls, min_bytes=20000)
+            if data:
+                logger.info(f"[GoogleMaps] {destination} → photo_ref={ref[:20]}")
+                return data
+    except Exception as e:
+        logger.debug(f"Google Places 오류 ({destination}): {e}")
+    return None
+
+
 def _wikimedia_search(query: str, used_urls: set) -> Optional[bytes]:
     """Wikimedia Commons — API 키 불필요, 무료 고화질 여행 사진."""
     try:
@@ -1008,12 +1094,24 @@ def fetch_travel_image(
                 span.set_attribute("source", "bing_api")
                 span.set_attribute("found_query", q)
                 return result
-            # 4순위: Wikimedia Commons (API 키 불필요)
+            # 4순위: Pexels 웹 스크래핑 (API 키 불필요)
+            result = _pexels_scrape(q, used_urls)
+            if result:
+                span.set_attribute("source", "pexels_scrape")
+                span.set_attribute("found_query", q)
+                return result
+            # 5순위: Wikimedia Commons (API 키 불필요)
             result = _wikimedia_search(q, used_urls)
             if result:
                 span.set_attribute("source", "wikimedia")
                 span.set_attribute("found_query", q)
                 return result
+
+        # 6순위: Google Maps Places 사진 (GOOGLE_MAPS_KEY 있을 때)
+        result = _google_places_photos(destination, used_urls)
+        if result:
+            span.set_attribute("source", "google_maps")
+            return result
 
         # 최후 폴백: Wikipedia 대표 이미지
         result = _wikipedia_main_image(destination, used_urls)
