@@ -4,38 +4,16 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy-and-run:
+  trigger-pythonanywhere:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
 
     steps:
-      - name: PythonAnywhere 배포 및 실행
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ssh.pythonanywhere.com
-          username: ${{ secrets.PA_USERNAME }}
-          password: ${{ secrets.PA_PASSWORD }}
-          envs: GEMINI_API_KEY,PEXELS_API_KEY,WP_SITE_URL,WP_USERNAME,WP_APP_PASSWORD,TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID,COUPANG_PARTNERS_URL,UNSPLASH_ACCESS_KEY,PINTEREST_ACCESS_TOKEN,PINTEREST_BOARD_ID,OTLP_ENDPOINT
-          script: |
-            REPO_DIR="/home/$USER/trip"
-            if [ -d "$REPO_DIR/.git" ]; then
-              cd "$REPO_DIR" && git pull origin main
-            else
-              git clone https://github.com/imaboy1212-svg/trip.git "$REPO_DIR"
-            fi
-            cd "$REPO_DIR"
-            pip install -r requirements.txt -q
-            python main.py
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          UNSPLASH_ACCESS_KEY: ${{ secrets.UNSPLASH_ACCESS_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-          WP_SITE_URL: ${{ secrets.WP_SITE_URL }}
-          WP_USERNAME: ${{ secrets.WP_USERNAME }}
-          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          PINTEREST_ACCESS_TOKEN: ${{ secrets.PINTEREST_ACCESS_TOKEN }}
-          PINTEREST_BOARD_ID: ${{ secrets.PINTEREST_BOARD_ID }}
-          COUPANG_PARTNERS_URL: ${{ secrets.COUPANG_PARTNERS_URL }}
-          OTLP_ENDPOINT: ${{ secrets.OTLP_ENDPOINT }}
+      - name: PythonAnywhere 실행 트리거
+        run: |
+          curl -s -X POST \
+            "https://www.pythonanywhere.com/api/v0/user/${{ secrets.PA_USERNAME }}/consoles/" \
+            -H "Authorization: Token ${{ secrets.PA_API_TOKEN }}" \
+            -d "executable=bash" \
+            -d "arguments=-c 'cd ~/trip && git pull origin main && python main.py'"
+          echo "PythonAnywhere 실행 트리거 완료"
