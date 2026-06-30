@@ -14,6 +14,12 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict
 from urllib.parse import quote
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 import requests
 from bs4 import BeautifulSoup
 from PIL import Image
