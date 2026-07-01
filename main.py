@@ -1338,7 +1338,7 @@ def crop_to_ratio(img_bytes: bytes, width: int, height: int) -> bytes:
 
 _BTN_STYLE = (
     "display:inline-block;padding:10px 22px;border-radius:8px;"
-    "font-size:14px;font-weight:700;text-decoration:none;color:#fff;"
+    "font-size:clamp(12px,3vw,14px);font-weight:700;text-decoration:none;color:#fff;"
     "margin:4px 8px 4px 0;"
 )
 
@@ -1592,7 +1592,7 @@ def build_hotel_buttons(destination: str) -> str:
         )
     btns = "".join(
         f'<a href="{url}" target="_blank" rel="nofollow noopener" '
-        f'style="{_BTN_STYLE}background:{color};">{name}에서 숙소 검색</a>'
+        f'style="{_BTN_STYLE}background:{color};">{name} 숙소 검색</a>'
         for name, url, color in valid
     )
     return f'<div style="{_BTN_WRAP}">{btns}</div>'
@@ -1601,15 +1601,15 @@ def build_hotel_buttons(destination: str) -> str:
 def build_hotel_buttons_custom(destination: str) -> str:
     """세시간전 제휴 링크 기반 맞춤형 숙소 CTA 버튼 (Agoda · Expedia · Trip.com)."""
     hotels = [
-        (AFF_AGODA,   "#e11d48", f"{destination} 인기 숙소 시크릿 특가 및 남은 객실 확인하기 ▶"),
-        (AFF_EXPEDIA, "#0c69b0", f"{destination} 추천 숙소 무료 취소 가능 객실 선점하기 ▶"),
-        (AFF_TRIP,    "#1a7abf", f"{destination} Trip.com 최저가 호텔 바로 예약하기 ▶"),
+        (AFF_AGODA,   "#e11d48", "Agoda",     f"{destination} 인기 숙소 시크릿 특가 및 남은 객실 확인"),
+        (AFF_EXPEDIA, "#0c69b0", "Expedia",   f"{destination} 추천 숙소 무료 취소 가능 객실 선점"),
+        (AFF_TRIP,    "#1a7abf", "Trip.com",  f"{destination} 최저가 호텔 바로 예약"),
     ]
     btns = "".join(
         f'<a href="{url}" target="_blank" rel="nofollow noopener sponsored" '
-        f'style="{_BTN_STYLE}background:{color};width:100%;box-sizing:border-box;'
-        f'text-align:center;display:block;margin:6px 0;">{label}</a>'
-        for url, color, label in hotels
+        f'style="{_BTN_STYLE}background:{color};display:block;margin:6px 0;text-align:center;">'
+        f'<span style="opacity:0.75;font-size:0.85em;">{brand}</span> {label}</a>'
+        for url, color, brand, label in hotels
     )
     return f'<div style="margin:16px 0 8px 0;">{btns}</div>'
 
@@ -1637,14 +1637,14 @@ def _get_top_tour(destination: str, overview: str) -> str:
 def build_tour_buttons(destination: str, tour_name: str) -> str:
     """세시간전 제휴 링크 기반 Klook 투어 버튼 + Trip.com 액티비티 버튼."""
     entries = [
-        (AFF_KLOOK, "#e85d04", f"Klook │ {tour_name} 최저가 예약하기 ▶"),
-        (AFF_TRIP,  "#1a7abf", f"Trip.com │ {destination} 투어·액티비티 예약하기 ▶"),
+        (AFF_KLOOK, "#e85d04", "Klook",    f"{tour_name} 최저가 예약"),
+        (AFF_TRIP,  "#1a7abf", "Trip.com", f"{destination} 투어·액티비티 예약"),
     ]
     btns = "".join(
         f'<a href="{url}" target="_blank" rel="nofollow noopener sponsored" '
-        f'style="{_BTN_STYLE}background:{color};width:100%;box-sizing:border-box;'
-        f'text-align:center;display:block;margin:6px 0;">{label}</a>'
-        for url, color, label in entries
+        f'style="{_BTN_STYLE}background:{color};display:block;margin:6px 0;text-align:center;">'
+        f'<span style="opacity:0.75;font-size:0.85em;">{brand}</span> {label}</a>'
+        for url, color, brand, label in entries
     )
     return (
         f'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;'
@@ -2094,7 +2094,7 @@ def _parse(raw: str, data: Dict, famous: str = "") -> Dict:
     body = raw
     for tag in ["TITLE", "FOCUS_KW", "META_DESC", "SLUG", "EXCERPT",
                 "HOTELS", "ATTRACTIONS", "TRANSPORT_SERVICES",
-                "TICKET_URLS", "TRANSPORT_URLS"]:
+                "TICKET_URLS", "TRANSPORT_URLS", "COUNTRY_KR"]:
         body = re.sub(rf'\[{tag}\].*?\[/{tag}\]\n?', '', body, flags=re.DOTALL)
     # Gemini가 ```html ... ``` 코드블록으로 감싸는 경우 제거
     body = re.sub(r'^```(?:html)?\s*\n?', '', body.strip(), flags=re.IGNORECASE)
