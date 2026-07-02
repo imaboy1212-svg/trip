@@ -2023,7 +2023,7 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
 [/TITLE]
 [COUNTRY_KR]{famous}가 속한 국가명을 한국어로 (최대 6자, 예: 태국, 모로코, 뉴질랜드)[/COUNTRY_KR]
 [FOCUS_KW]3~4단어 한국어 롱테일 키워드[/FOCUS_KW]
-[META_DESC]130~155자 메타 설명[/META_DESC]
+[META_DESC]130~155자 메타 설명 — 반드시 자연스러운 한국어 문장으로만 작성. HTML태그·이미지출처·URL·특수기호 절대 포함 금지[/META_DESC]
 [SLUG]{famous}와 {hidden} 두 여행지명 모두 포함한 3~6단어 영문 하이픈 슬러그 (예: chiang-mai-pai-hidden-gem)[/SLUG]
 [EXCERPT]100~150자 발췌문[/EXCERPT]
 [HOTELS]
@@ -2662,8 +2662,6 @@ def run():
                         f'<figure style="margin:32px 0;text-align:center;">'
                         f'<img src="{img_url}" alt="{selected} 여행" '
                         f'style="width:100%;max-width:900px;height:auto;border-radius:12px;object-fit:cover;" />'
-                        f'<figcaption style="margin-top:8px;font-size:12px;color:#94a3b8;">'
-                        f'{selected} &middot; Photo via Unsplash/Pexels</figcaption>'
                         f'</figure>'
                     )
                     insert_pos = content["body"].find("</div>")
@@ -2727,8 +2725,6 @@ def run():
                             f'<figure style="margin:20px 0 24px;">'
                             f'<img src="{famous_media["url"]}" alt="{famous} 여행" '
                             f'style="width:100%;max-width:900px;height:auto;border-radius:12px;object-fit:cover;" />'
-                            f'<figcaption style="margin-top:6px;font-size:12px;color:#94a3b8;">'
-                            f'{famous} &middot; Photo via Unsplash/Pexels</figcaption>'
                             f'</figure>'
                         )
                         content["body"] = content["body"].replace("{PHOTO:famous}", famous_html)
@@ -2772,8 +2768,6 @@ def run():
                             f'<figure style="margin:20px 0 24px;">'
                             f'<img src="{sec_url}" alt="{selected} {section_key}" '
                             f'style="width:100%;max-width:900px;height:auto;border-radius:12px;object-fit:cover;" />'
-                            f'<figcaption style="margin-top:6px;font-size:12px;color:#94a3b8;">'
-                            f'{selected} &middot; Photo via Unsplash/Pexels</figcaption>'
                             f'</figure>'
                         )
                         content["body"] = content["body"].replace(placeholder, sec_html)
