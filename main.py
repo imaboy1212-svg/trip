@@ -1699,6 +1699,15 @@ def build_prompt(data_famous: Dict, data_hidden: Dict, style_guide: str, contine
 - 연계 여행지: {hidden} (아직 잘 알려지지 않은 숨은 보석 — 심층 탐구)
 포스팅의 핵심 가치: "{famous}를 방문한 김에 {hidden}까지 가보면 어떨까?" 라는 발견의 즐거움 제공
 
+[분량 제한 — 반드시 준수]
+- 본문 HTML 총 글자 수 5,000자 이하 (HTML 태그 포함)
+- H2 섹션 최대 5개, H3 최대 3개 (전체 섹션 8개 이하)
+- 표(table) 최대 2개 — 기본정보표 + 일정표만 허용
+- 교통 수단 비교는 표 금지 → 카드형 div로 대체
+- 맛집·숙소는 표 금지 → 간단한 리스트(이름 + 한 줄 특징 + 가격대)로 대체
+- 문단(p태그) 총 20개 이하
+- 캡션 제외 모든 텍스트 font-size 13px 이상 (12px 절대 금지)
+
 [가이드북 스타일 지침]
 {style_guide}
 
@@ -1773,30 +1782,34 @@ def build_prompt(data_famous: Dict, data_hidden: Dict, style_guide: str, contine
   </div>
 </div>
 
---- 3.5. 여행 기본 정보 표 (인트로 박스 바로 아래) ---
-<table style="width:100%;border-collapse:collapse;margin:0 0 32px 0;font-size:14px;">
+--- 3.5. 핵심 요약 카드 (인트로 박스 바로 아래 — 첫 화면 최우선) ---
+<div style="background:#0c4a6e;border-radius:16px;padding:24px 26px;margin-bottom:28px;">
+  <p style="margin:0 0 14px 0;font-size:15px;font-weight:700;color:#ffffff;letter-spacing:0.08em;">핵심 3가지</p>
+  <ul style="list-style:none;padding:0;margin:0;">
+    <li style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px;"><span style="display:inline-block;background:{CAT_COLOR};color:#fff;font-size:13px;font-weight:800;padding:2px 8px;border-radius:4px;flex-shrink:0;margin-top:2px;">01</span><span style="font-size:15px;color:#ffffff;line-height:1.7;">[핵심 포인트 1 — 여행지 최대 매력 한 문장]</span></li>
+    <li style="display:flex;align-items:flex-start;gap:12px;margin-bottom:10px;"><span style="display:inline-block;background:{CAT_COLOR};color:#fff;font-size:13px;font-weight:800;padding:2px 8px;border-radius:4px;flex-shrink:0;margin-top:2px;">02</span><span style="font-size:15px;color:#ffffff;line-height:1.7;">[핵심 포인트 2 — 이동 방법 또는 비용 핵심]</span></li>
+    <li style="display:flex;align-items:flex-start;gap:12px;"><span style="display:inline-block;background:{CAT_COLOR};color:#fff;font-size:13px;font-weight:800;padding:2px 8px;border-radius:4px;flex-shrink:0;margin-top:2px;">03</span><span style="font-size:15px;color:#ffffff;line-height:1.7;">[핵심 포인트 3 — 방문 시기 또는 주의사항]</span></li>
+  </ul>
+</div>
+
+{{PHOTO:featured}}
+
+--- 4. 여행 기본 정보 표 ---
+<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 0 28px 0;word-break:keep-all;">
+<table style="width:100%;border-collapse:collapse;font-size:14px;min-width:280px;">
   <thead><tr style="background:#0c4a6e;color:#fff;">
-    <th style="padding:12px 16px;text-align:center;font-weight:700;width:35%;">항목</th>
-    <th style="padding:12px 16px;text-align:center;font-weight:700;">내용</th>
+    <th style="padding:11px 14px;text-align:center;font-weight:700;width:35%;">항목</th>
+    <th style="padding:11px 14px;text-align:center;font-weight:700;">내용</th>
   </tr></thead>
   <tbody>
-    <tr style="background:#fff;border-bottom:1px solid #e2e8f0;"><td style="padding:11px 16px;font-weight:700;color:#0f172a;text-align:center;">위치</td><td style="padding:11px 16px;color:#334155;">[국가 · 지역(주/도) · 도시 또는 마을명 순으로. 예: 캐나다 브리티시컬럼비아주 · 하이다 과이 제도]</td></tr>
-    <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;"><td style="padding:11px 16px;font-weight:700;color:#0f172a;text-align:center;">최적 여행 시기</td><td style="padding:11px 16px;color:#334155;">[시기 + 한 줄 이유]</td></tr>
-    <tr style="background:#fff;border-bottom:1px solid #e2e8f0;"><td style="padding:11px 16px;font-weight:700;color:#0f172a;text-align:center;">언어</td><td style="padding:11px 16px;color:#334155;">[공용어]</td></tr>
-    <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;"><td style="padding:11px 16px;font-weight:700;color:#0f172a;text-align:center;">통화</td><td style="padding:11px 16px;color:#334155;">[통화명 및 기호]</td></tr>
-    <tr style="background:#fff;border-bottom:1px solid #e2e8f0;"><td style="padding:11px 16px;font-weight:700;color:#0f172a;text-align:center;">시차 (한국 기준)</td><td style="padding:11px 16px;color:#334155;">[UTC±X / 한국보다 N시간]</td></tr>
-    <tr style="background:#f8fafc;"><td style="padding:11px 16px;font-weight:700;color:#0f172a;text-align:center;">1일 평균 예산</td><td style="padding:11px 16px;color:#334155;">[예산 범위 USD]</td></tr>
+    <tr style="background:#fff;border-bottom:1px solid #e2e8f0;"><td style="padding:10px 14px;font-weight:700;color:#0f172a;text-align:center;">위치</td><td style="padding:10px 14px;color:#334155;">[국가 · 지역 · 도시명]</td></tr>
+    <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;"><td style="padding:10px 14px;font-weight:700;color:#0f172a;text-align:center;">최적 여행 시기</td><td style="padding:10px 14px;color:#334155;">[시기 + 한 줄 이유]</td></tr>
+    <tr style="background:#fff;border-bottom:1px solid #e2e8f0;"><td style="padding:10px 14px;font-weight:700;color:#0f172a;text-align:center;">언어</td><td style="padding:10px 14px;color:#334155;">[공용어]</td></tr>
+    <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;"><td style="padding:10px 14px;font-weight:700;color:#0f172a;text-align:center;">통화</td><td style="padding:10px 14px;color:#334155;">[통화명 및 기호]</td></tr>
+    <tr style="background:#fff;border-bottom:1px solid #e2e8f0;"><td style="padding:10px 14px;font-weight:700;color:#0f172a;text-align:center;">시차 (한국 기준)</td><td style="padding:10px 14px;color:#334155;">[UTC±X / 한국보다 N시간]</td></tr>
+    <tr style="background:#f8fafc;"><td style="padding:10px 14px;font-weight:700;color:#0f172a;text-align:center;">1일 평균 예산</td><td style="padding:10px 14px;color:#334155;">[예산 범위 USD]</td></tr>
   </tbody>
 </table>
-
---- 4. 핵심 요약 카드 ---
-<div style="background:#0c4a6e;border-radius:16px;padding:28px 30px;margin-bottom:32px;">
-  <p style="margin:0 0 16px 0;font-size:15px;font-weight:700;color:#ffffff;letter-spacing:0.08em;">핵심 3가지</p>
-  <ul style="list-style:none;padding:0;margin:0;">
-    <li style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;"><span style="display:inline-block;background:{CAT_COLOR};color:#fff;font-size:12px;font-weight:800;padding:2px 8px;border-radius:4px;flex-shrink:0;margin-top:2px;">01</span><span style="font-size:15px;color:#ffffff;line-height:1.7;">[핵심 포인트 1]</span></li>
-    <li style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;"><span style="display:inline-block;background:{CAT_COLOR};color:#fff;font-size:12px;font-weight:800;padding:2px 8px;border-radius:4px;flex-shrink:0;margin-top:2px;">02</span><span style="font-size:15px;color:#ffffff;line-height:1.7;">[핵심 포인트 2]</span></li>
-    <li style="display:flex;align-items:flex-start;gap:12px;"><span style="display:inline-block;background:{CAT_COLOR};color:#fff;font-size:12px;font-weight:800;padding:2px 8px;border-radius:4px;flex-shrink:0;margin-top:2px;">03</span><span style="font-size:15px;color:#ffffff;line-height:1.7;">[핵심 포인트 3]</span></li>
-  </ul>
 </div>
 
 --- 5. 추천 / 비추 섹션 ---
@@ -1861,9 +1874,9 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
 
   [도입 p태그 1~2개 — {hidden}의 특별함과 방문 가치 서술]
 
-  아래 3개 테마로 명소를 분류하여 H3 소제목 + 세부 명소 설명으로 구성한다.
-  각 명소는 반드시 한국어명(영문명) 병기. 위치(지역·마을명), 핵심 볼거리, 접근 방법·허가 필요 여부·소요 시간 등 실용 정보를 p태그에 포함한다.
-  명소는 전체 합산 최소 6개 이상 언급한다.
+  아래 2개 테마로 명소를 분류하여 H3 소제목 + 세부 명소 설명으로 구성한다.
+  각 명소는 한국어명(영문명) 병기. 위치·핵심 볼거리·실용정보를 p태그 1개에 압축 서술.
+  명소는 전체 합산 4~6개 언급.
 
   <h3 style="font-size:clamp(15px,2vw,17px);font-weight:700;color:#0f172a;margin:28px 0 12px 0;">[테마1 — 예: 문화·역사 유산]</h3>
   <p>[명소A (영문명): 위치·특징·실용정보.]</p>
@@ -1871,15 +1884,10 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
   <p>[명소C (영문명): 위치·특징·실용정보.]</p>
   {{PHOTO:attraction}}
 
-  <h3 style="font-size:clamp(15px,2vw,17px);font-weight:700;color:#0f172a;margin:28px 0 12px 0;">[테마2 — 예: 자연·하이킹·국립공원]</h3>
-  <p>[명소D (영문명): 난이도·거리·소요시간·출발지 포함.]</p>
-  <p>[명소E (영문명): 명소 설명·실용정보.]</p>
-  <p>[명소F (영문명): 명소 설명·실용정보.]</p>
+  <h3 style="font-size:clamp(15px,2vw,17px);font-weight:700;color:#0f172a;margin:28px 0 12px 0;">[테마2 — 예: 자연·체험·로컬 명소]</h3>
+  <p>[명소D (영문명): 특징·실용정보.]</p>
+  <p>[명소E (영문명): 특징·실용정보.]</p>
   {{PHOTO:attraction2}}
-
-  <h3 style="font-size:clamp(15px,2vw,17px);font-weight:700;color:#0f172a;margin:28px 0 12px 0;">[테마3 — 예: 해변·체험·액티비티 또는 로컬 명소]</h3>
-  <p>[명소G (영문명): 명소 설명·실용정보.]</p>
-  <p>[명소H (영문명): 명소 설명·실용정보.]</p>
   {{PHOTO:attraction3}}
 
   {{PINTEREST_IMAGES}}
@@ -1901,7 +1909,12 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
 <div style="margin-bottom:56px;padding-top:40px;border-top:1px solid #e2e8f0;">
   <h2 style="font-size:clamp(18px,3vw,22px);font-weight:800;color:#0f172a;margin:8px 0;line-height:1.4;">{famous} + {hidden} 함께하는 추천 일정</h2>
   <p style="font-size:15px;color:#94a3b8;font-weight:600;margin:0 0 16px 0;">[일정 한 줄 요약]</p>
-  [N박M일 추천 동선을 p태그 또는 간단한 표로 제시. 예: 1~2일차 {famous} → 3~4일차 {hidden} → 귀국. 이동 방법·숙박지 간략 포함.]
+  [N박M일 추천 동선을 간단한 리스트로 제시. 1일차·2일차 형태로 각 1줄씩. 표 금지.]
+  <ul style="margin:12px 0;padding-left:18px;font-size:14px;color:#334155;line-height:2.0;">
+    <li>[1일차: {famous} 도착 → 핵심 명소 1~2곳]</li>
+    <li>[2일차: {famous} → {hidden} 이동 (수단·시간) → 명소 탐방]</li>
+    <li>[3일차: {hidden} 심층 탐방 → 귀국 준비]</li>
+  </ul>
 </div>
 
 [[[AD_IN_ARTICLE]]]
@@ -1911,15 +1924,12 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
   <h2 style="font-size:clamp(18px,3vw,22px);font-weight:800;color:#0f172a;margin:8px 0;line-height:1.4;">[맛집 제목]</h2>
   <p style="font-size:15px;color:#94a3b8;font-weight:600;margin:0 0 16px 0;">[서브 문구]</p>
   {{PHOTO:food}}
-  [본문 p태그 3~5개 — 서술형, 대표 음식·식당명 포함]
-  <div style="background:{CAT_LIGHT_BG};border-left:4px solid {CAT_COLOR};padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0 0 0;">
-    <p style="margin:0 0 8px 0;font-size:12px;font-weight:700;color:{CAT_COLOR};letter-spacing:0.05em;">핵심 포인트</p>
-    <ul style="margin:0;padding-left:18px;font-size:14px;color:#334155;line-height:1.9;">
-      <li>[맛집 핵심 1]</li>
-      <li>[맛집 핵심 2]</li>
-      <li>[맛집 핵심 3]</li>
-    </ul>
-  </div>
+  [대표 음식 소개 p태그 1~2개 — 어떤 음식이 유명한지 간결하게]
+  <ul style="margin:10px 0 16px 0;padding-left:18px;font-size:14px;color:#334155;line-height:2.0;">
+    <li>[식당명 A — 대표 메뉴 · 위치 · 1인 USD X~Y]</li>
+    <li>[식당명 B — 대표 메뉴 · 위치 · 1인 USD X~Y]</li>
+    <li>[식당명 C — 대표 메뉴 · 위치 · 1인 USD X~Y]</li>
+  </ul>
 </div>
 
 <div style="margin-bottom:56px;padding-top:40px;border-top:1px solid #e2e8f0;">
@@ -1933,26 +1943,28 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
    이후 {hidden}까지 이동하는 주요 교통수단(버스·차량·기차 등)과 소요 시간을 함께 서술한다.]
 
   <h3 style="font-size:clamp(15px,2vw,17px);font-weight:700;color:#0f172a;margin:28px 0 12px 0;">공항에서 시내·목적지까지</h3>
-  [공항→목적지 이동 안내 p태그 1~2개 — 도착 공항에서 시내까지 거리·이동 방법 개요]
-  <table style="width:100%;border-collapse:collapse;margin:16px 0 20px;font-size:14px;">
-    <thead><tr style="background:#0c4a6e;color:#fff;">
-      <th style="padding:10px 14px;text-align:center;">교통수단</th>
-      <th style="padding:10px 14px;text-align:center;">소요 시간</th>
-      <th style="padding:10px 14px;text-align:center;">비용</th>
-      <th style="padding:10px 14px;text-align:center;">특징 및 주의사항</th>
-    </tr></thead>
-    <tbody>
-      [공항→시내 이동수단별 tr 3~4행 (현지 실정에 맞게). 각 행 첫 번째 td는 text-align:center 적용]
-    </tbody>
-  </table>
+  [공항→목적지 이동 안내 p태그 1개]
+  <div style="display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 20px 0;">
+    [교통수단별 카드 2~3개 — 아래 형식 반복]
+    <div style="flex:1;min-width:140px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;">
+      <p style="margin:0 0 6px 0;font-size:14px;font-weight:700;color:#0f172a;">[교통수단명]</p>
+      <p style="margin:0 0 4px 0;font-size:13px;color:#64748b;">소요 [X분/시간]</p>
+      <p style="margin:0 0 4px 0;font-size:13px;color:#64748b;">비용 [금액]</p>
+      <p style="margin:0;font-size:13px;color:#94a3b8;">[한 줄 특징]</p>
+    </div>
+  </div>
 
   {{TRANSPORT_CLASSES_TABLE}}
   {{TRANSPORT_BUTTONS}}
 
   {{PICTOGRAM:accommodation}}
-  <h3 style="font-size:clamp(16px,2.5vw,19px);font-weight:700;color:#0f172a;margin:8px 0 16px 0;">[숙소 소제목]</h3>
-  [숙소 본문 p태그 2~3개 — 지역별 특성·추천 숙박 지구 서술]
-  {{ACCOMMODATION_TABLE}}
+  <h3 style="font-size:clamp(15px,2vw,17px);font-weight:700;color:#0f172a;margin:28px 0 12px 0;">[숙소 소제목]</h3>
+  [숙소 추천 지구 p태그 1개 — 어느 동네에 묵을지 한 문장]
+  <ul style="margin:10px 0 16px 0;padding-left:18px;font-size:14px;color:#334155;line-height:2.0;">
+    <li>[숙소명 A — 유형(호텔/게스트하우스 등) · 특징 한 줄 · 1박 USD X~Y]</li>
+    <li>[숙소명 B — 유형 · 특징 한 줄 · 1박 USD X~Y]</li>
+    <li>[숙소명 C — 유형 · 특징 한 줄 · 1박 USD X~Y]</li>
+  </ul>
   {{HOTEL_BUTTONS}}
 
   <div style="background:{CAT_LIGHT_BG};border-left:4px solid {CAT_COLOR};padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0 0 0;">
@@ -1970,14 +1982,13 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
   <h2 style="font-size:clamp(18px,3vw,22px);font-weight:800;color:#0f172a;margin:8px 0;line-height:1.4;">[여행팁 제목]</h2>
   <p style="font-size:15px;color:#94a3b8;font-weight:600;margin:0 0 16px 0;">[서브 문구]</p>
   {{PHOTO:tips}}
-  [본문 p태그 3~5개 — 서술형]
-  <div style="background:{CAT_LIGHT_BG};border-left:4px solid {CAT_COLOR};padding:16px 20px;border-radius:0 12px 12px 0;margin:24px 0 0 0;">
-    <p style="margin:0 0 8px 0;font-size:12px;font-weight:700;color:{CAT_COLOR};letter-spacing:0.05em;">여행 전 체크리스트</p>
+  [실전 팁 p태그 1~2개 — 현지 주의사항·환전·통신 등 핵심만]
+  <div style="background:{CAT_LIGHT_BG};border-left:4px solid {CAT_COLOR};padding:14px 18px;border-radius:0 12px 12px 0;margin:20px 0 0 0;">
+    <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:{CAT_COLOR};letter-spacing:0.05em;">체크리스트</p>
     <ul style="margin:0;padding-left:18px;font-size:14px;color:#334155;line-height:1.9;">
       <li>[팁 1]</li>
       <li>[팁 2]</li>
       <li>[팁 3]</li>
-      <li>[팁 4]</li>
     </ul>
   </div>
 </div>
@@ -2317,15 +2328,20 @@ def is_already_published(destination: str, published: set) -> bool:
 
 
 def _wrap_html_blocks(body: str) -> str:
-    """테이블·커스텀 div를 wp:html 블록으로 감싸 Gutenberg 파싱 시 인라인 스타일 보존."""
+    """테이블을 overflow-x:auto wrapper + wp:html 블록으로 감싸 모바일 깨짐·Gutenberg 스타일 손실 방지."""
     import re as _re
-    # <table ...>...</table> 전체를 wp:html로 감싸기
-    body = _re.sub(
-        r'(<table[\s\S]*?</table>)',
-        r'<!-- wp:html -->\1<!-- /wp:html -->',
-        body,
-        flags=_re.IGNORECASE,
-    )
+    # 이미 overflow wrapper가 있는 표는 건너뜀
+    def _wrap_table(m: "re.Match") -> str:
+        table_html = m.group(1)
+        if 'overflow-x:auto' in m.group(0)[:50]:
+            return m.group(0)
+        wrapped = (
+            f'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;word-break:keep-all;">'
+            f'{table_html}</div>'
+        )
+        return f'<!-- wp:html -->{wrapped}<!-- /wp:html -->'
+
+    body = _re.sub(r'(<table[\s\S]*?</table>)', _wrap_table, body, flags=_re.IGNORECASE)
     return body
 
 
@@ -2710,6 +2726,9 @@ def run():
 
         # Step 6.5: 섹션별 이미지 수집·업로드 후 플레이스홀더 교체
         # PHOTO:famous는 유명 여행지 이름으로 별도 검색
+        # {PHOTO:featured}는 {PHOTO:famous}와 동일 처리 (첫 화면 대표 이미지)
+        content["body"] = content["body"].replace("{PHOTO:featured}", "{PHOTO:famous}")
+
         if "{PHOTO:famous}" in content["body"]:
             try:
                 famous_img = fetch_travel_image(famous, orientation="landscape", section="attraction", used_urls=used_urls)
