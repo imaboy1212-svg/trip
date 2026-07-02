@@ -1280,12 +1280,13 @@ def fetch_travel_image(
         _rnd.shuffle(shuffled_queries)
 
         for q in shuffled_queries:
-            # 1순위: SerpApi Google Images — 여행지 매칭 정확도 최상
-            result = _serpapi_google_images(q, used_urls)
-            if result:
-                span.set_attribute("source", "serpapi_google_images")
-                span.set_attribute("found_query", q)
-                return result
+            # 1순위: SerpApi Google Images — 음식·교통 섹션 한정 (매칭 정확도가 특히 중요 + 월 100회 한도 절약)
+            if section in ("food", "transport"):
+                result = _serpapi_google_images(q, used_urls)
+                if result:
+                    span.set_attribute("source", "serpapi_google_images")
+                    span.set_attribute("found_query", q)
+                    return result
             # Pexels API (키 있을 때)
             result = _pexels_search(q, orientation, used_urls)
             if result:
