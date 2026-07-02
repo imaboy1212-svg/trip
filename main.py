@@ -2316,11 +2316,24 @@ def is_already_published(destination: str, published: set) -> bool:
     return any(dest_lower in item or dest_slug in item for item in published)
 
 
+def _wrap_html_blocks(body: str) -> str:
+    """테이블·커스텀 div를 wp:html 블록으로 감싸 Gutenberg 파싱 시 인라인 스타일 보존."""
+    import re as _re
+    # <table ...>...</table> 전체를 wp:html로 감싸기
+    body = _re.sub(
+        r'(<table[\s\S]*?</table>)',
+        r'<!-- wp:html -->\1<!-- /wp:html -->',
+        body,
+        flags=_re.IGNORECASE,
+    )
+    return body
+
+
 def wp_publish(content: Dict, media_id: Optional[int], cat_id: Optional[int]) -> Dict:
     with tracer.start_as_current_span("wp_publish") as span:
         payload = {
             "title":   content["title"],
-            "content": content["body"],
+            "content": _wrap_html_blocks(content["body"]),
             "excerpt": content["excerpt"],
             "status":  "draft",
             "slug":    content["slug"],
