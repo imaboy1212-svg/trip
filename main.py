@@ -648,6 +648,43 @@ def _fetch_url(url: str, used_urls: set, min_bytes: int = 40000) -> Optional[byt
         return None
 
 
+def _serpapi_google_images(query: str, used_urls: set) -> Optional[bytes]:
+    """SerpApi Google Images — 구글 이미지 검색 (여행지 매칭 정확도 최상)."""
+    if not SERPAPI_KEY:
+        return None
+    try:
+        resp = requests.get(
+            "https://serpapi.com/search",
+            params={
+                "engine": "google_images",
+                "q": query,
+                "api_key": SERPAPI_KEY,
+                "hl": "en",
+                "safe": "active",
+                "imgsz": "l",          # 큰 이미지만
+            },
+            timeout=20,
+        )
+        if resp.status_code != 200:
+            return None
+        results = resp.json().get("images_results", [])
+        import random
+        # 상위 결과가 가장 정확 — 상위 15개 안에서만 랜덤 선택해 정확도 유지
+        pool = results[:15]
+        random.shuffle(pool)
+        for item in pool:
+            url = item.get("original", "")
+            if not url or not url.startswith("http"):
+                continue
+            data = _fetch_url(url, used_urls, min_bytes=25000)
+            if data:
+                logger.info(f"[SerpApi GoogleImages] {query[:40]} → {url[:60]}")
+                return data
+    except Exception as e:
+        logger.debug(f"SerpApi Google Images 오류 ({query[:30]}): {e}")
+    return None
+
+
 def _serpapi_maps_photos(destination: str, used_urls: set) -> Optional[bytes]:
     """SerpApi Google Maps Photos — 구글 지도 내 실사 사진 수집."""
     if not SERPAPI_KEY:
@@ -1243,6 +1280,12 @@ def fetch_travel_image(
         _rnd.shuffle(shuffled_queries)
 
         for q in shuffled_queries:
+            # 1순위: SerpApi Google Images — 여행지 매칭 정확도 최상
+            result = _serpapi_google_images(q, used_urls)
+            if result:
+                span.set_attribute("source", "serpapi_google_images")
+                span.set_attribute("found_query", q)
+                return result
             # Pexels API (키 있을 때)
             result = _pexels_search(q, orientation, used_urls)
             if result:
