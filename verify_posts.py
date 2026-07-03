@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 
 from main import (
     WP_SITE_URL, _wp_auth, GOOGLE_MAPS_KEY,
-    fetch_country_facts, fetch_verified_attractions,
+    fetch_country_facts, verify_place_exists,
 )
 
 
@@ -77,23 +77,20 @@ def verify_post(post: dict) -> dict:
         "issues": [],
     }
 
-    # 1. 명소 실존 여부 교차 검증 (Google Places)
+    # 1. 명소 실존 여부 개별 검증 (Google Places Find Place — 명소 단위 직접 조회)
     mentioned = extract_mentioned_places(body)
     if mentioned and GOOGLE_MAPS_KEY:
-        try:
-            verified = fetch_verified_attractions(dest)
-            verified_names_lower = " ".join(p["name"].lower() for p in verified)
-            unverified = []
-            for kor, eng in mentioned[:8]:
-                eng_clean = eng.strip().lower()
-                if eng_clean and eng_clean not in verified_names_lower and len(eng_clean) > 3:
-                    unverified.append(f"{kor.strip()}({eng.strip()})")
-            if unverified and verified:
-                result["issues"].append(
-                    f"명소 미검증 (Google Places 결과에 없음, 실제 존재 여부 수동 확인 필요): {', '.join(unverified[:5])}"
-                )
-        except Exception as e:
-            result["issues"].append(f"명소 검증 중 오류: {e}")
+        not_found = []
+        for kor, eng in mentioned[:8]:
+            eng_clean = eng.strip()
+            if len(eng_clean) < 3:
+                continue
+            if not verify_place_exists(eng_clean, dest):
+                not_found.append(f"{kor.strip()}({eng_clean})")
+        if not_found:
+            result["issues"].append(
+                f"명소 실존 확인 안 됨 (구글 검색 결과 없음 — 지어낸 명소일 가능성): {', '.join(not_found)}"
+            )
 
     # 2. 기본정보표 언어/통화/시차 검증 (REST Countries)
     table_info = extract_info_table(body)

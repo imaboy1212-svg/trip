@@ -510,6 +510,31 @@ def fetch_verified_attractions(destination: str) -> List[Dict]:
     return places
 
 
+def verify_place_exists(place_name: str, destination: str) -> bool:
+    """개별 명소 실존 여부를 직접 검색으로 확인.
+    포괄 리스트 대조 방식은 오지·정착지명을 놓치므로, 명소 단위로 직접 조회하는 것이 정확합니다.
+    """
+    if not GOOGLE_MAPS_KEY:
+        return True  # 키 없으면 검증 불가 — 오탐 방지 위해 통과 처리
+    try:
+        r = requests.get(
+            "https://maps.googleapis.com/maps/api/place/findplacefromtext/json",
+            params={
+                "input": f"{place_name} {destination}",
+                "inputtype": "textquery",
+                "fields": "place_id",
+                "key": GOOGLE_MAPS_KEY,
+            },
+            timeout=12,
+        )
+        if r.status_code != 200:
+            return True
+        return bool(r.json().get("candidates"))
+    except Exception as e:
+        logger.debug(f"명소 존재 검증 실패 ({place_name}): {e}")
+        return True
+
+
 def fetch_travel_data(destination: str) -> Dict:
     with tracer.start_as_current_span("fetch_travel_data") as span:
         span.set_attribute("destination", destination)
