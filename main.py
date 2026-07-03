@@ -529,6 +529,27 @@ def fetch_travel_data(destination: str) -> Dict:
             data["verified_attractions"] = fetch_verified_attractions(destination)
         except Exception as e:
             logger.debug(f"검증 명소 조회 실패 ({destination}): {e}")
+
+        # 1순위: 공식 관광 사이트 텍스트 수집 (가장 신뢰도 높은 소스)
+        try:
+            official_urls = _get_official_tourism_urls(destination)
+            for off_url in official_urls:
+                resp = safe_get(off_url, timeout=15)
+                if not resp:
+                    continue
+                soup = BeautifulSoup(resp.text, "html.parser")
+                for tag in soup(["script", "style", "nav", "footer", "header"]):
+                    tag.decompose()
+                text = soup.get_text(" ", strip=True)
+                if len(text) < 300:
+                    continue
+                data["overview"] = text[:3000]
+                data["sources"].append(off_url)
+                logger.info(f"[공식사이트] '{destination}' 텍스트 수집 성공: {off_url}")
+                break
+        except Exception as e:
+            logger.debug(f"공식 사이트 텍스트 수집 실패 ({destination}): {e}")
+
         enc = quote(destination.replace(" ", "_"))
         for base in ["https://wikitravel.org/en/", "https://en.wikivoyage.org/wiki/"]:
             resp = safe_get(base + enc, timeout=15)
@@ -538,7 +559,9 @@ def fetch_travel_data(destination: str) -> Dict:
             content = soup.select_one("#mw-content-text")
             if not content or len(content.get_text(strip=True)) < 400:
                 continue
-            data["overview"] = content.get_text(" ", strip=True)[:3000]
+            # 공식 사이트에서 이미 개요를 확보했으면 덮어쓰지 않고 세부 섹션만 보강
+            if not data["overview"]:
+                data["overview"] = content.get_text(" ", strip=True)[:3000]
             data["sources"].append(base + enc)
             for h in content.select("h2, h3"):
                 tl = h.get_text(strip=True).lower()
@@ -595,7 +618,6 @@ def fetch_travel_data(destination: str) -> Dict:
                 if len(gemini_text) > 200:
                     data["overview"] = gemini_text[:3000]
                     data["attractions"] = gemini_text[:1500]
-                    data["sources"].append("Gemini AI")
                     total = sum(len(v) for v in data.values() if isinstance(v, str))
                     logger.info(f"'{destination}' Gemini 폴백 완료 ({total}자)")
             except Exception as e:
