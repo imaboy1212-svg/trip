@@ -42,12 +42,32 @@ def extract_destination_from_title(title_html: str) -> str:
     return title
 
 
+_NON_PLACE_STOPWORDS = (
+    "tours", "charters", "association", "airlines", "operators", "agency",
+    "iaato", "nomad", "krone", "birr", "dollar", "euro", "franc", "peso",
+    "expedia", "agoda", "klook", "booking", "corporation", "company", "co.",
+)
+
+
 def extract_mentioned_places(body_html: str):
-    """본문 p태그에서 '한국어명(영문명)' 패턴의 명소명을 추출."""
+    """본문 p·li 태그에서만 '한국어명(영문명)' 패턴의 명소명을 추출.
+    표(table)는 통화·시차 등 사실 데이터라 명소 검증 대상에서 제외.
+    기관명·투어사명·통화명은 스톱워드로 걸러 오탐을 줄입니다.
+    """
     soup = BeautifulSoup(body_html, "html.parser")
-    text = soup.get_text(" ", strip=True)
-    # "한국어(EnglishName)" 패턴 추출
-    return re.findall(r'([가-힣·\s]{2,20})\(([A-Za-z][A-Za-z\s\-\.]{2,40})\)', text)
+    for table in soup.find_all("table"):
+        table.decompose()
+    text = " ".join(tag.get_text(" ", strip=True) for tag in soup.find_all(["p", "li"]))
+    matches = re.findall(r'([가-힣·\s]{2,20})\(([A-Za-z][A-Za-z\s\-\.]{2,40})\)', text)
+    filtered = []
+    for kor, eng in matches:
+        eng_lower = eng.lower()
+        if any(sw in eng_lower for sw in _NON_PLACE_STOPWORDS):
+            continue
+        if re.fullmatch(r'[A-Z]{2,4}', eng.strip()):  # 통화 코드(NOK, ETB 등) 제외
+            continue
+        filtered.append((kor, eng))
+    return filtered
 
 
 def extract_info_table(body_html: str):
