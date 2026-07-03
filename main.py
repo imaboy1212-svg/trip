@@ -2746,13 +2746,13 @@ def run():
 
         if len(pin_uploaded) >= 2:
             pin_html = (
-                f'<div style="display:flex;gap:12px;margin:24px 0;">'
-                f'<figure style="flex:1;margin:0;">'
+                f'<div style="display:flex;flex-wrap:wrap;gap:12px;margin:24px 0;">'
+                f'<figure style="flex:1;min-width:140px;margin:0;">'
                 f'<img src="{pin_uploaded[0]}" alt="{selected} 명소" '
                 f'style="aspect-ratio:2/3;object-fit:cover;width:100%;border-radius:12px;" />'
                 f'<figcaption style="margin-top:6px;font-size:11px;color:#94a3b8;text-align:center;">'
                 f'{selected} · 명소</figcaption></figure>'
-                f'<figure style="flex:1;margin:0;">'
+                f'<figure style="flex:1;min-width:140px;margin:0;">'
                 f'<img src="{pin_uploaded[1]}" alt="{selected} 풍경" '
                 f'style="aspect-ratio:2/3;object-fit:cover;width:100%;border-radius:12px;" />'
                 f'<figcaption style="margin-top:6px;font-size:11px;color:#94a3b8;text-align:center;">'
@@ -2761,9 +2761,9 @@ def run():
             )
         elif len(pin_uploaded) == 1:
             pin_html = (
-                f'<figure style="margin:24px 0;">'
+                f'<figure style="margin:24px auto;max-width:320px;text-align:center;">'
                 f'<img src="{pin_uploaded[0]}" alt="{selected} 명소" '
-                f'style="aspect-ratio:2/3;object-fit:cover;width:50%;border-radius:12px;" />'
+                f'style="aspect-ratio:2/3;object-fit:cover;width:100%;border-radius:12px;" />'
                 f'</figure>'
             )
         content["body"] = content["body"].replace("{PINTEREST_IMAGES}", pin_html)
