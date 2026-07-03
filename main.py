@@ -2232,7 +2232,8 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
 [응답 형식 — 맨 끝에 순서대로 출력]
 [TITLE]
 아래 규칙으로 제목을 작성하세요.
-- 두 여행지명은 반드시 한국어로 번역하여 사용 (영어 지명 금지. 예: Chiang Mai → 치앙마이, Pai → 파이, Kyoto → 교토)
+- 두 여행지명은 반드시 한국어로만 표기 (영어 원어 병기 절대 금지. 예: "치앙마이" O, "치앙마이(Chiang Mai)" X, "자이언 내로우즈 (Zion Narrows)" X)
+- 잘 알려지지 않은 지명이라도 괄호 안에 영문명을 덧붙이지 말 것. 한국어 표기만으로 제목을 완성할 것
 - 두 여행지를 모두 자연스럽게 담은 감성적 한국어 문장
 - "여행 완전 정복", "총정리", "가이드" 같은 정보성 표현 금지
 - "치앙마이가 알려준 파이", "교토에서 한 발 더, 아마노하시다테", "마라케시 너머의 아이트 벤 하두" 형태 권장
@@ -2328,6 +2329,8 @@ def _parse(raw: str, data: Dict, famous: str = "") -> Dict:
     body = body.replace('[[[AD_AUTORELAXED]]]', AD_AUTORELAXED)
 
     raw_title   = ex("TITLE",      f"{dest} 여행 가이드 — 명소·맛집·교통 총정리")
+    # Gemini가 지시를 무시하고 영문 지명을 괄호로 덧붙이는 경우 강제 제거 (예: "자이언 내로우즈 (Zion Narrows)")
+    raw_title   = re.sub(r'\s*\([A-Za-z][A-Za-z\s\-\.\']{1,40}\)\s*$', '', raw_title).strip()
     country_kr  = ex("COUNTRY_KR", "").strip()
     full_title  = f"[{country_kr}] {raw_title}" if country_kr else raw_title
 
