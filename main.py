@@ -432,6 +432,84 @@ def fetch_guidebook_style(destination: str) -> str:
 # 9. 여행지 데이터 수집 (fallback 포함)
 # ==========================================
 
+def fetch_country_facts(destination: str) -> Dict:
+    """REST Countries API(무료, 키 불필요) — 통화·언어·수도 등 검증된 사실 정보.
+    AI 추측 대신 실제 데이터로 기본정보표를 채워 신뢰도를 높입니다.
+    """
+    facts: Dict = {}
+    try:
+        # Gemini로 여행지→국가 매핑 (지명이 국가가 아닐 수 있으므로)
+        prompt = (
+            f"What country is '{destination}' located in? "
+            f"Reply with ONLY the English country name (e.g. 'Vietnam', 'Japan'). No explanation."
+        )
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        resp = model.generate_content(prompt)
+        country_en = resp.text.strip().strip("'\".")
+        if not country_en or len(country_en) > 60:
+            return facts
+
+        r = requests.get(
+            f"https://restcountries.com/v3.1/name/{quote(country_en)}",
+            params={"fields": "name,currencies,languages,timezones,capital"},
+            timeout=12,
+        )
+        if r.status_code != 200:
+            return facts
+        results = r.json()
+        if not results:
+            return facts
+        c = results[0]
+        currencies = c.get("currencies", {})
+        if currencies:
+            code, cur = next(iter(currencies.items()))
+            facts["currency"] = f"{cur.get('name', code)} ({cur.get('symbol', code)})"
+        languages = c.get("languages", {})
+        if languages:
+            facts["languages"] = ", ".join(languages.values())
+        timezones = c.get("timezones", [])
+        if timezones:
+            facts["timezone"] = timezones[0]
+        capital = c.get("capital", [])
+        if capital:
+            facts["capital"] = capital[0]
+        facts["country_en"] = country_en
+        logger.info(f"[국가정보팀] '{destination}' → {country_en}: {facts}")
+    except Exception as e:
+        logger.debug(f"REST Countries 조회 실패 ({destination}): {e}")
+    return facts
+
+
+def fetch_verified_attractions(destination: str) -> List[Dict]:
+    """Google Places API(이미 보유한 GOOGLE_MAPS_KEY) — 실존 명소 검증 리스트.
+    Gemini가 없는 명소를 지어내지 않도록 실제 장소명·평점·주소를 사실 근거로 제공합니다.
+    """
+    if not GOOGLE_MAPS_KEY:
+        return []
+    places: List[Dict] = []
+    try:
+        r = requests.get(
+            "https://maps.googleapis.com/maps/api/place/textsearch/json",
+            params={"query": f"tourist attractions in {destination}", "key": GOOGLE_MAPS_KEY},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            return places
+        for item in r.json().get("results", [])[:10]:
+            name = item.get("name", "")
+            if not name:
+                continue
+            places.append({
+                "name": name,
+                "rating": item.get("rating", ""),
+                "address": item.get("formatted_address", ""),
+            })
+        logger.info(f"[장소검증팀] '{destination}' 검증 명소 {len(places)}건 수집")
+    except Exception as e:
+        logger.debug(f"Google Places 검증 조회 실패 ({destination}): {e}")
+    return places
+
+
 def fetch_travel_data(destination: str) -> Dict:
     with tracer.start_as_current_span("fetch_travel_data") as span:
         span.set_attribute("destination", destination)
@@ -440,7 +518,17 @@ def fetch_travel_data(destination: str) -> Dict:
             "overview": "", "attractions": "", "food": "",
             "transport": "", "accommodation": "", "tips": "",
             "sources": [],
+            "country_facts": {},
+            "verified_attractions": [],
         }
+        try:
+            data["country_facts"] = fetch_country_facts(destination)
+        except Exception as e:
+            logger.debug(f"국가 정보 조회 실패 ({destination}): {e}")
+        try:
+            data["verified_attractions"] = fetch_verified_attractions(destination)
+        except Exception as e:
+            logger.debug(f"검증 명소 조회 실패 ({destination}): {e}")
         enc = quote(destination.replace(" ", "_"))
         for base in ["https://wikitravel.org/en/", "https://en.wikivoyage.org/wiki/"]:
             resp = safe_get(base + enc, timeout=15)
@@ -1729,6 +1817,30 @@ def build_prompt(data_famous: Dict, data_hidden: Dict, style_guide: str, contine
     )
     continent_label = continent or "전 세계"
 
+    country_facts = data_hidden.get("country_facts") or {}
+    if country_facts:
+        lines = [f"국가: {country_facts.get('country_en', '')}"]
+        if country_facts.get("languages"):
+            lines.append(f"공용어: {country_facts['languages']}")
+        if country_facts.get("currency"):
+            lines.append(f"통화: {country_facts['currency']}")
+        if country_facts.get("timezone"):
+            lines.append(f"시차(UTC): {country_facts['timezone']}")
+        if country_facts.get("capital"):
+            lines.append(f"수도: {country_facts['capital']}")
+        country_facts_block = "국가 기본 정보(REST Countries API 검증):\n" + "\n".join(f"- {l}" for l in lines)
+    else:
+        country_facts_block = "국가 기본 정보: 검증 데이터 없음 — 알고 있는 사실만 신중히 서술"
+
+    verified = data_hidden.get("verified_attractions") or []
+    if verified:
+        lines = [f"{p['name']}" + (f" (평점 {p['rating']})" if p.get("rating") else "") for p in verified]
+        verified_attractions_block = (
+            f"{hidden} 실존 명소 목록(Google Places API 검증):\n" + "\n".join(f"- {l}" for l in lines)
+        )
+    else:
+        verified_attractions_block = "실존 명소 목록: 검증 데이터 없음 — [수집 정보]에 있는 명소만 서술, 임의 생성 금지"
+
     return f"""
 당신은 trip.bestwellth.org의 전문 여행 큐레이터입니다.
 아래 [수집 정보]와 [가이드북 스타일]을 바탕으로 완성된 블로그 포스팅 HTML을 작성하세요.
@@ -1767,11 +1879,17 @@ def build_prompt(data_famous: Dict, data_hidden: Dict, style_guide: str, contine
   여행팁: {data_hidden["tips"][:600]}
   참고 출처: {', '.join(data_hidden["sources"])}
 
+[검증된 사실 정보 — 반드시 이 값을 그대로 사용, 임의로 다른 값 지어내기 금지]
+{country_facts_block}
+{verified_attractions_block}
+
 [절대 금지 사항]
 - 이모티콘(Emoji) 사용 전면 금지 (제목·본문 모두)
 - 개인 일기·경험 형식 금지 ("저는", "제가", "다녀왔습니다" 등)
 - Markdown 기호(**, ##, -, *) 본문 삽입 금지
-- 수치·사실 지어내기 금지
+- 수치·사실 지어내기 금지 — [검증된 사실 정보]에 값이 있으면 그 값을 그대로 사용
+- [검증된 사실 정보]에 언어·통화·시차가 명시되어 있으면 기본 정보 표에 반드시 그 값을 사용
+- [검증된 사실 정보]에 명소 리스트가 있으면 본문 명소 설명 시 그 실존 명소명을 우선 활용 (완전히 새로운 명소를 지어내지 않음)
 - "~것으로 보인다", "~것으로 추정된다" 류 모호한 표현 금지
 - 본문에 외부 링크(href 포함 a태그) 직접 삽입 금지 — 버튼·링크는 {{TICKET_BUTTONS}} {{TRANSPORT_BUTTONS}} {{HOTEL_BUTTONS}} 플레이스홀더가 자동 처리함
 - "바로가기", "웹사이트 링크", "예매하기" 등 링크성 텍스트를 본문 p태그 안에 삽입 금지
