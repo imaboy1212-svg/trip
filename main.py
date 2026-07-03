@@ -1705,7 +1705,7 @@ def build_prompt(data_famous: Dict, data_hidden: Dict, style_guide: str, contine
     hidden = data_hidden["destination"]
     dest   = hidden  # 심층 탐구 대상 = 숨은 여행지
     maps_embed = (
-        f'<iframe src="https://maps.google.com/maps?q={quote(hidden)}&output=embed" '
+        f'<iframe src="https://maps.google.com/maps?q={quote(hidden)}&z=11&output=embed" '
         f'width="100%" height="300" style="border:0;border-radius:12px;margin-top:12px;" '
         f'allowfullscreen="" loading="lazy"></iframe>'
     )
