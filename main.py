@@ -2324,9 +2324,11 @@ def _parse(raw: str, data: Dict, famous: str = "") -> Dict:
     body = re.sub(r'<a(?![^>]*\brel=)[^>]*>(.*?)</a>', r'\1', body, flags=re.DOTALL)  # Gemini 생성 링크만 제거, rel= 있는 버튼은 유지
 
     # 광고 플레이스홀더 교체: 지도 아래, 본문 1 아래, 참고자료 아래
-    body = body.replace('[[[AD_DISPLAY]]]', AD_DISPLAY)
-    body = body.replace('[[[AD_IN_ARTICLE]]]', AD_IN_ARTICLE)
-    body = body.replace('[[[AD_AUTORELAXED]]]', AD_AUTORELAXED)
+    # 광고 스크립트는 wp:html 블록으로 감싸 wpautop의 자동 줄바꿈(<br> 삽입)이
+    # <script> 태그 내부를 훼손하지 않도록 보호합니다.
+    body = body.replace('[[[AD_DISPLAY]]]', f'<!-- wp:html -->{AD_DISPLAY}<!-- /wp:html -->')
+    body = body.replace('[[[AD_IN_ARTICLE]]]', f'<!-- wp:html -->{AD_IN_ARTICLE}<!-- /wp:html -->')
+    body = body.replace('[[[AD_AUTORELAXED]]]', f'<!-- wp:html -->{AD_AUTORELAXED}<!-- /wp:html -->')
 
     raw_title   = ex("TITLE",      f"{dest} 여행 가이드 — 명소·맛집·교통 총정리")
     # Gemini가 지시를 무시하고 영문 지명을 괄호로 덧붙이는 경우 강제 제거 (예: "자이언 내로우즈 (Zion Narrows)")
