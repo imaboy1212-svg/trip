@@ -11,7 +11,7 @@ import time
 import base64
 import logging
 from datetime import datetime, timezone
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from urllib.parse import quote
 
 try:
@@ -1247,10 +1247,11 @@ def fetch_travel_image(
     query: str = "",
     section: str = "featured",
     used_urls: Optional[set] = None,
-) -> Optional[bytes]:
+) -> Optional[Tuple[bytes, str]]:
     """포토그래픽팀 — 섹션별 정교한 쿼리로 여행 사진을 수집합니다.
     우선순위: Unsplash API → Pexels API → Bing Image Search API(키 있을 때)
     used_urls를 공유해 동일 글 내 중복 이미지를 차단합니다.
+    반환값: (이미지 bytes, 매칭에 사용된 검색어) — 매칭 검증용으로 검색어를 함께 반환합니다.
     """
     with tracer.start_as_current_span("fetch_travel_image") as span:
         span.set_attribute("destination", destination)
@@ -1286,43 +1287,43 @@ def fetch_travel_image(
                 if result:
                     span.set_attribute("source", "serpapi_google_images")
                     span.set_attribute("found_query", q)
-                    return result
+                    return result, q
             # Pexels API (키 있을 때)
             result = _pexels_search(q, orientation, used_urls)
             if result:
                 span.set_attribute("source", "pexels")
                 span.set_attribute("found_query", q)
-                return result
+                return result, q
             # Pixabay API (무료 키)
             result = _pixabay_search(q, used_urls)
             if result:
                 span.set_attribute("source", "pixabay")
                 span.set_attribute("found_query", q)
-                return result
+                return result, q
             # Openverse (API 키 불필요)
             result = _openverse_search(q, used_urls)
             if result:
                 span.set_attribute("source", "openverse")
                 span.set_attribute("found_query", q)
-                return result
+                return result, q
             # Wikimedia Commons (API 키 불필요)
             result = _wikimedia_search(q, used_urls)
             if result:
                 span.set_attribute("source", "wikimedia")
                 span.set_attribute("found_query", q)
-                return result
+                return result, q
             # Unsplash (키 있을 때)
             result = _unsplash_search(q, orientation, used_urls)
             if result:
                 span.set_attribute("source", "unsplash")
                 span.set_attribute("found_query", q)
-                return result
+                return result, q
             # Bing (키 있을 때)
             result = _bing_api_search(q, orientation, used_urls)
             if result:
                 span.set_attribute("source", "bing_api")
                 span.set_attribute("found_query", q)
-                return result
+                return result, q
 
         # 키 있는 고품질 소스들 (랜덤 순서)
         for src in api_sources_with_key:
@@ -1330,29 +1331,25 @@ def fetch_travel_image(
                 result = _serpapi_maps_photos(destination, used_urls)
                 if result:
                     span.set_attribute("source", "serpapi_maps")
-                    return result
+                    return result, destination
             elif src == "google_places":
                 result = _google_places_photos(destination, used_urls)
                 if result:
                     span.set_attribute("source", "google_maps")
-                    return result
-
-        # 나머지 키 있는 소스 중 아직 안 쓴 것
-        for src in api_sources_with_key:
-            pass  # already tried above
+                    return result, destination
 
         # Pexels 웹 스크래핑 폴백
         for q in shuffled_queries[:3]:
             result = _pexels_scrape(q, used_urls)
             if result:
                 span.set_attribute("source", "pexels_scrape")
-                return result
+                return result, q
 
         # 최후 폴백: Wikipedia 대표 이미지
         result = _wikipedia_main_image(destination, used_urls)
         if result:
             span.set_attribute("source", "wikipedia")
-            return result
+            return result, destination
 
         logger.warning(f"[포토그래픽팀] 이미지 없음 — 패스 ({destination} / {section})")
         return None
@@ -2675,22 +2672,35 @@ def run():
         # Step 5: 실사 이미지 수집 (공식 사이트 풀 우선, 이후 API fallback)
         used_urls: set = set()
 
-        def _pick_from_pool_or_api(section: str, orientation: str = "landscape", query: str = "") -> Optional[bytes]:
-            """공식 사이트 풀에서 먼저 꺼내고 없으면 API로 fallback."""
+        def _pick_from_pool_or_api(section: str, orientation: str = "landscape", query: str = "") -> Optional[Tuple[bytes, str]]:
+            """공식 사이트 풀에서 먼저 꺼내고 없으면 API로 fallback. (이미지, 검색어) 반환."""
             # featured·attraction·tips 섹션은 공식 풀 우선 사용
             if official_img_pool and section in ("featured", "attraction", "tips"):
                 img = official_img_pool.pop(0)
                 logger.info(f"[공식사이트풀] {section} 이미지 사용")
-                return img
+                return img, f"{selected} 공식 사이트"
             return fetch_travel_image(selected, orientation=orientation, section=section,
                                       query=query, used_urls=used_urls)
 
-        img_landscape = _pick_from_pool_or_api("featured", orientation="landscape")
-        img_portrait  = fetch_travel_image(selected, orientation="portrait", section="portrait", used_urls=used_urls)
+        # KEYWORD_STYLE: 사진 아래 검색어를 작게 표시 (매칭 불일치 시 수동 교체용)
+        _KEYWORD_STYLE = (
+            "margin-top:6px;font-size:12px;color:#94a3b8;text-align:center;"
+        )
+
+        def _keyword_caption(kw: str) -> str:
+            return f'<figcaption style="{_KEYWORD_STYLE}">검색어: {kw}</figcaption>'
+
+        img_landscape_pair = _pick_from_pool_or_api("featured", orientation="landscape")
+        img_portrait_pair  = fetch_travel_image(selected, orientation="portrait", section="portrait", used_urls=used_urls)
 
         # Pinterest용 2:3 세로 이미지 2장 수집
-        pin_img1 = fetch_travel_image(selected, orientation="portrait", section="attraction", used_urls=used_urls)
-        pin_img2 = fetch_travel_image(selected, orientation="portrait", section="tips",       used_urls=used_urls)
+        pin_pair1 = fetch_travel_image(selected, orientation="portrait", section="attraction", used_urls=used_urls)
+        pin_pair2 = fetch_travel_image(selected, orientation="portrait", section="tips",       used_urls=used_urls)
+
+        img_landscape, kw_landscape = img_landscape_pair if img_landscape_pair else (None, "")
+        img_portrait,  kw_portrait  = img_portrait_pair  if img_portrait_pair  else (None, "")
+        pin_img1, pin_kw1 = pin_pair1 if pin_pair1 else (None, "")
+        pin_img2, pin_kw2 = pin_pair2 if pin_pair2 else (None, "")
 
         img_pin = None
         if img_portrait:
@@ -2722,6 +2732,7 @@ def run():
                         f'<figure style="margin:32px 0;text-align:center;">'
                         f'<img src="{img_url}" alt="{selected} 여행" '
                         f'style="width:100%;max-width:900px;height:auto;border-radius:12px;object-fit:cover;" />'
+                        f'{_keyword_caption(kw_landscape)}'
                         f'</figure>'
                     )
                     insert_pos = content["body"].find("</div>")
@@ -2732,7 +2743,7 @@ def run():
         # Step 6.3: Pinterest 2:3 세로 이미지 2장 업로드 → {PINTEREST_IMAGES} 교체
         pin_html = ""
         pin_uploaded = []
-        for idx, pin_raw in enumerate([pin_img1, pin_img2], start=1):
+        for idx, (pin_raw, pin_kw) in enumerate([(pin_img1, pin_kw1), (pin_img2, pin_kw2)], start=1):
             if not pin_raw:
                 continue
             try:
@@ -2742,22 +2753,26 @@ def run():
             pin_fname = f"{selected.lower().replace(' ', '_')}_pin{idx}_{today}.jpg"
             pin_media = wp_upload_image(pin_cropped, pin_fname, alt=f"{selected} 여행 {idx}")
             if pin_media and pin_media.get("url"):
-                pin_uploaded.append(pin_media["url"])
+                pin_uploaded.append((pin_media["url"], pin_kw))
 
         if len(pin_uploaded) >= 2:
             pin_html = (
-                f'<figure style="margin:24px 0;display:flex;gap:12px;">'
-                f'<img src="{pin_uploaded[0]}" alt="{selected} 명소 1" '
+                f'<figure style="margin:24px 0;">'
+                f'<div style="display:flex;gap:12px;">'
+                f'<img src="{pin_uploaded[0][0]}" alt="{selected} 명소 1" '
                 f'style="aspect-ratio:2/3;object-fit:cover;border-radius:12px;flex:1;min-width:0;width:100%;" />'
-                f'<img src="{pin_uploaded[1]}" alt="{selected} 명소 2" '
+                f'<img src="{pin_uploaded[1][0]}" alt="{selected} 명소 2" '
                 f'style="aspect-ratio:2/3;object-fit:cover;border-radius:12px;flex:1;min-width:0;width:100%;" />'
+                f'</div>'
+                f'<figcaption style="{_KEYWORD_STYLE}">검색어: {pin_uploaded[0][1]} / {pin_uploaded[1][1]}</figcaption>'
                 f'</figure>'
             )
         elif len(pin_uploaded) == 1:
             pin_html = (
                 f'<figure style="margin:24px auto;max-width:320px;text-align:center;">'
-                f'<img src="{pin_uploaded[0]}" alt="{selected} 명소" '
+                f'<img src="{pin_uploaded[0][0]}" alt="{selected} 명소" '
                 f'style="aspect-ratio:2/3;object-fit:cover;width:100%;border-radius:12px;" />'
+                f'{_keyword_caption(pin_uploaded[0][1])}'
                 f'</figure>'
             )
         content["body"] = content["body"].replace("{PINTEREST_IMAGES}", pin_html)
@@ -2769,8 +2784,9 @@ def run():
 
         if "{PHOTO:famous}" in content["body"]:
             try:
-                famous_img = fetch_travel_image(famous, orientation="landscape", section="attraction", used_urls=used_urls)
-                if famous_img:
+                famous_pair = fetch_travel_image(famous, orientation="landscape", section="attraction", used_urls=used_urls)
+                if famous_pair:
+                    famous_img, famous_kw = famous_pair
                     try:
                         famous_img = crop_to_ratio(famous_img, width=900, height=500)
                     except Exception:
@@ -2782,6 +2798,7 @@ def run():
                             f'<figure style="margin:20px 0 24px;">'
                             f'<img src="{famous_media["url"]}" alt="{famous} 여행" '
                             f'style="width:100%;max-width:900px;height:auto;border-radius:12px;object-fit:cover;" />'
+                            f'{_keyword_caption(famous_kw)}'
                             f'</figure>'
                         )
                         content["body"] = content["body"].replace("{PHOTO:famous}", famous_html)
@@ -2804,15 +2821,16 @@ def run():
                         content.get("transport_services", []),
                         content.get("transport", ""),
                     )
-                    sec_img = None
+                    sec_pair = None
                     for tq in transport_queries:
-                        sec_img = fetch_travel_image(selected, orientation="landscape", query=tq, section="transport", used_urls=used_urls)
-                        if sec_img:
+                        sec_pair = fetch_travel_image(selected, orientation="landscape", query=tq, section="transport", used_urls=used_urls)
+                        if sec_pair:
                             logger.info(f"[교통 이미지] 쿼리 성공: '{tq}'")
                             break
                 else:
-                    sec_img = _pick_from_pool_or_api(api_section, orientation="landscape")
-                if sec_img:
+                    sec_pair = _pick_from_pool_or_api(api_section, orientation="landscape")
+                if sec_pair:
+                    sec_img, sec_kw = sec_pair
                     try:
                         sec_img = crop_to_ratio(sec_img, width=900, height=500)
                     except Exception:
@@ -2825,6 +2843,7 @@ def run():
                             f'<figure style="margin:20px 0 24px;">'
                             f'<img src="{sec_url}" alt="{selected} {section_key}" '
                             f'style="width:100%;max-width:900px;height:auto;border-radius:12px;object-fit:cover;" />'
+                            f'{_keyword_caption(sec_kw)}'
                             f'</figure>'
                         )
                         content["body"] = content["body"].replace(placeholder, sec_html)
