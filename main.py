@@ -2746,18 +2746,12 @@ def run():
 
         if len(pin_uploaded) >= 2:
             pin_html = (
-                f'<div style="display:flex;flex-wrap:wrap;gap:12px;margin:24px 0;">'
-                f'<figure style="flex:1;min-width:140px;margin:0;">'
-                f'<img src="{pin_uploaded[0]}" alt="{selected} 명소" '
-                f'style="aspect-ratio:2/3;object-fit:cover;width:100%;border-radius:12px;" />'
-                f'<figcaption style="margin-top:6px;font-size:11px;color:#94a3b8;text-align:center;">'
-                f'{selected} · 명소</figcaption></figure>'
-                f'<figure style="flex:1;min-width:140px;margin:0;">'
-                f'<img src="{pin_uploaded[1]}" alt="{selected} 풍경" '
-                f'style="aspect-ratio:2/3;object-fit:cover;width:100%;border-radius:12px;" />'
-                f'<figcaption style="margin-top:6px;font-size:11px;color:#94a3b8;text-align:center;">'
-                f'{selected} · 풍경</figcaption></figure>'
-                f'</div>'
+                f'<figure style="margin:24px 0;display:flex;gap:12px;">'
+                f'<img src="{pin_uploaded[0]}" alt="{selected} 명소 1" '
+                f'style="aspect-ratio:2/3;object-fit:cover;border-radius:12px;flex:1;min-width:0;width:100%;" />'
+                f'<img src="{pin_uploaded[1]}" alt="{selected} 명소 2" '
+                f'style="aspect-ratio:2/3;object-fit:cover;border-radius:12px;flex:1;min-width:0;width:100%;" />'
+                f'</figure>'
             )
         elif len(pin_uploaded) == 1:
             pin_html = (
