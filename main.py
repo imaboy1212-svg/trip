@@ -2039,7 +2039,7 @@ def build_prompt(data_famous: Dict, data_hidden: Dict, style_guide: str, contine
 </div>
 
 --- 6. 구글 지도 섹션 ---
-<div style="margin-bottom:36px;"><p style="font-size:14px;font-weight:700;color:#334155;margin-bottom:8px;">{dest} 위치</p>{maps_embed}</div>
+<!-- wp:html --><div style="margin-bottom:36px;"><p style="font-size:14px;font-weight:700;color:#334155;margin-bottom:8px;">{dest} 위치</p>{maps_embed}</div><!-- /wp:html -->
 
 [[[AD_DISPLAY]]]
 
@@ -2553,6 +2553,14 @@ def _wrap_html_blocks(body: str) -> str:
         return f'<!-- wp:html -->{wrapped}<!-- /wp:html -->'
 
     body = _re.sub(r'(<table[\s\S]*?</table>)', _wrap_table, body, flags=_re.IGNORECASE)
+
+    # <iframe>도 wpautop이 <p>로 잘못 감싸 태그를 깨뜨리는 걸 방지 (구글 지도 등)
+    def _wrap_iframe(m: "re.Match") -> str:
+        if 'wp:html' in body[max(0, m.start() - 20):m.start()]:
+            return m.group(0)
+        return f'<!-- wp:html -->{m.group(0)}<!-- /wp:html -->'
+
+    body = _re.sub(r'<iframe[\s\S]*?</iframe>', _wrap_iframe, body, flags=_re.IGNORECASE)
     return body
 
 
