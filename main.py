@@ -1539,7 +1539,9 @@ def _build_options_table(rows: List[Dict], title: str, headers: List[str], cat_c
     for i, row in enumerate(rows):
         style = _TABLE_ROW_STYLES[i % 2]
         cells = "".join(
-            f'<td style="padding:10px 14px;{"text-align:center;font-weight:600;" if j==0 else ""}">{v}</td>'
+            f'<td style="padding:10px 14px;vertical-align:top;'
+            f'{"text-align:center;font-weight:600;" if j==0 else ""}">'
+            f'{(str(v).strip() or "-")}</td>'
             for j, v in enumerate(row.get("cells", []))
         )
         tbody += f'<tr style="{style}">{cells}</tr>'
@@ -1669,13 +1671,17 @@ def build_transport_classes_table(services: List[str], destination: str, cat_col
         f"For the following transport services relevant to {destination}, "
         f"list the available seat/cabin classes in order from lowest to highest tier.\n"
         f"{service_list}\n\n"
-        f"For each service and class, output exactly:\n"
+        f"For each service and class, output exactly 4 fields separated by '|' — no more, no fewer:\n"
         f"ServiceName|ClassName|PriceRange(USD)|KeyDifferences\n"
+        f"ServiceName = the company/service name only (e.g. 'Supratours'). Do NOT add a separate vehicle-type field.\n"
+        f"ClassName = the actual tier/class name (e.g. 'Confort', 'Confort Plus'), never a generic word like 'bus' or 'taxi'.\n"
+        f"If a value is unknown, write exactly '-' for that field — do not leave it blank or guess.\n"
+        f"Example: Supratours|Confort|7-18|Standard seating, AC\n"
         f"Output only the data lines. No explanations. No markdown."
     )
     try:
         resp = gemini.generate_content(prompt)
-        lines = [l.strip() for l in resp.text.strip().splitlines() if l.count("|") >= 3]
+        lines = [l.strip() for l in resp.text.strip().splitlines() if l.count("|") == 3]
         if not lines:
             return ""
         from itertools import groupby
