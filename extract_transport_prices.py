@@ -48,7 +48,7 @@ def extract_class_tables(body_html: str):
 
 def main():
     posts = get_all_published_posts(limit=30)
-    print(f"점검 대상: {len(posts)}개 글\n{'='*70}")
+    lines = [f"점검 대상: {len(posts)}개 글", "=" * 70]
     for post in posts:
         title = post["title"]["rendered"] if isinstance(post["title"], dict) else post["title"]
         body = post["content"]["rendered"] if isinstance(post["content"], dict) else post["content"]
@@ -60,19 +60,30 @@ def main():
         if not cards and not tables:
             continue
 
-        print(f"\n{'='*70}")
-        print(f"[{dest}] {title}")
-        print(f"URL: {post['link']}")
+        lines.append("")
+        lines.append("=" * 70)
+        lines.append(f"[{dest}] {title}")
+        lines.append(f"URL: {post['link']}")
         if cards:
-            print("\n  -- 공항→목적지 카드 --")
+            lines.append("")
+            lines.append("  -- 공항→목적지 카드 --")
             for c in cards:
-                print(f"  {c}")
+                lines.append(f"  {c}")
         if tables:
-            print("\n  -- 클래스 비교 표 --")
+            lines.append("")
+            lines.append("  -- 클래스 비교 표 --")
             for t_title, rows in tables:
-                print(f"  {t_title}")
+                lines.append(f"  {t_title}")
                 for r in rows:
-                    print(f"    {r}")
+                    lines.append(f"    {r}")
+
+    output = "\n".join(lines)
+    print(output)
+
+    out_path = "transport_prices_report.txt"
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(output)
+    print(f"\n\n결과가 {out_path} 파일로 저장되었습니다.")
 
 
 if __name__ == "__main__":
