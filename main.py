@@ -1610,10 +1610,13 @@ def build_transport_classes_table(services: List[str], destination: str, cat_col
         f"ServiceName|ClassName|PriceRange|KeyDifferences\n"
         f"ServiceName = the company/service name only (e.g. 'Supratours'). Do NOT add a separate vehicle-type field.\n"
         f"ClassName = the actual tier/class name (e.g. 'Confort', 'Confort Plus'), never a generic word like 'bus' or 'taxi'.\n"
-        f"PriceRange = use the ACTUAL LOCAL CURRENCY of {destination}'s country (e.g. JPY, VND, THB, MAD, EUR) — never USD. "
-        f"Append an approximate KRW conversion in parentheses. Base the range on realistic local fares for this specific route "
-        f"(consider distance, terrain, tolls) — do not reuse generic global averages.\n"
-        f"If a value is unknown, write exactly '-' for that field — do not leave it blank or guess.\n"
+        f"PriceRange = ONLY use a number if the [실시간 검색 근거자료] above contains a concrete figure for this route. "
+        f"When used, write it in the ACTUAL LOCAL CURRENCY of {destination}'s country (e.g. JPY, VND, THB, MAD, EUR) — never USD — "
+        f"with an approximate KRW conversion in parentheses. Base it on realistic local fares for this specific route "
+        f"(consider distance, terrain, tolls) — never reuse generic global averages.\n"
+        f"If the search facts do NOT cover this specific class/route, do not guess a number — write in Korean exactly: "
+        f"'요금 확인 필요 (예약 시점 현지 사이트 참조)'.\n"
+        f"KeyDifferences should still be filled in with real, useful detail (seating, amenities, booking method) even when price is unknown.\n"
         f"Example: Supratours|Confort|120-180 MAD (약 21,000~32,000원)|Standard seating, AC\n"
         f"Output only the data lines. No explanations. No markdown."
     )
@@ -2096,16 +2099,19 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
 
   [{famous} 관문 공항 안내 p태그 1개 + {famous}→{hidden} 이동 방법 안내 p태그 1개]
   [반드시 포함: {famous}에 입국할 때 이용하는 공항명과 공항코드를 명시한다.
-   이후 {hidden}까지 이동하는 주요 교통수단(버스·차량·기차 등)과 소요 시간을 함께 서술한다.]
+   이후 {hidden}까지 이동하는 주요 교통수단(버스·차량·기차 등)과 소요 시간을 함께 서술한다.
+   가능한 실제 노선명·터미널명·환승 지점 등을 구체적으로 언급하여 신뢰도 높은 실용 정보로 작성한다.]
 
   <h3 style="font-size:clamp(15px,2vw,17px);font-weight:700;color:#0f172a;margin:28px 0 12px 0;">공항에서 시내·목적지까지</h3>
   [공항→목적지 이동 안내 p태그 1개]
 
   [교통수단 카드 작성 규칙 — 반드시 준수]
-  - 교통수단명은 "셔틀(Shuttle)"처럼 모호한 명칭 금지. 현지 실제 운영 방식으로 구체적으로 분류할 것.
-    예: 현지 정기 대중교통(버스/기차 노선명), 도어투도어 프라이빗 트랜스퍼(사전예약), Uber/Grab 등 현지 주력 승차공유 앱, 일반 미터기 택시, 렌터카 등.
-  - 요금은 반드시 해당 국가의 실제 현지 통화(JPY, VND, THB, EUR, AUD 등)로 표기하고, 괄호 안에 대략적인 원화(KRW) 환산 금액을 병기한다. USD 등 임의 통화 사용 금지.
-  - 요금은 실제 {famous}→{hidden} 구간의 지리적 거리·지형(산악·고속도로 톨게이트·시외 여부)을 고려한 현실적인 범위로 산출한다. 단거리 동네 요금이나 막연한 평균치를 장거리 이동에 적용하지 말 것.
+  - 교통수단명은 "셔틀(Shuttle)"처럼 모호한 명칭 금지. 현지 실제 운영 방식·회사명으로 구체적으로 분류할 것.
+    예: 현지 정기 대중교통(실제 버스/기차 노선명 또는 운영사명), 도어투도어 프라이빗 트랜스퍼(사전예약), Uber/Grab 등 현지 주력 승차공유 앱, 일반 미터기 택시, 렌터카 등.
+  - 각 수단마다 실제 이용 방법(승차장 위치, 예약 방식, 운행 시간대·배차 간격)을 최대한 구체적으로 서술해 실용성을 높인다.
+  - 요금은 [실시간 검색 근거자료]에 구체적 수치가 있을 때만 현지 통화(JPY, VND, THB, EUR, AUD 등) + 괄호 안 원화(KRW) 환산으로 표기한다. USD 등 임의 통화 사용 금지.
+  - 검색 근거자료에 해당 구간의 신뢰할 만한 요금 정보가 없으면 숫자를 절대 추측하지 말고, 비용 칸에 정확히 "요금 확인 필요 (예약 시점 현지 사이트 참조)"라고만 쓴다. 대신 이동 방법·소요시간·이용 팁은 평소처럼 충실히 작성한다.
+  - 단거리 동네 요금이나 막연한 평균치를 장거리 이동에 적용하지 말 것.
   - 직접 경험한 것처럼 서술 금지("~해봤다" 등). 다양한 공개 정보를 종합한 객관적 정보 큐레이션 톤 유지.
 
   <div style="display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 20px 0;">
@@ -2113,8 +2119,8 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
     <div style="flex:1;min-width:140px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;">
       <p style="margin:0 0 6px 0;font-size:14px;font-weight:700;color:#0f172a;">[구체적 교통수단명]</p>
       <p style="margin:0 0 4px 0;font-size:13px;color:#64748b;">소요 [X분/시간]</p>
-      <p style="margin:0 0 4px 0;font-size:13px;color:#64748b;">비용 [현지통화 금액 (약 KRW 환산금액)]</p>
-      <p style="margin:0;font-size:13px;color:#94a3b8;">[한 줄 특징 — 예약 필요 여부·운행 시간대 등]</p>
+      <p style="margin:0 0 4px 0;font-size:13px;color:#64748b;">비용 [현지통화 금액 (약 KRW 환산금액) 또는 "요금 확인 필요 (예약 시점 현지 사이트 참조)"]</p>
+      <p style="margin:0;font-size:13px;color:#94a3b8;">[한 줄 특징 — 승차장·예약 방법·운행 시간대 등 구체적으로]</p>
     </div>
   </div>
 
