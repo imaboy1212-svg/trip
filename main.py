@@ -1672,11 +1672,14 @@ def build_transport_classes_table(services: List[str], destination: str, cat_col
         f"list the available seat/cabin classes in order from lowest to highest tier.\n"
         f"{service_list}\n\n"
         f"For each service and class, output exactly 4 fields separated by '|' — no more, no fewer:\n"
-        f"ServiceName|ClassName|PriceRange(USD)|KeyDifferences\n"
+        f"ServiceName|ClassName|PriceRange|KeyDifferences\n"
         f"ServiceName = the company/service name only (e.g. 'Supratours'). Do NOT add a separate vehicle-type field.\n"
         f"ClassName = the actual tier/class name (e.g. 'Confort', 'Confort Plus'), never a generic word like 'bus' or 'taxi'.\n"
+        f"PriceRange = use the ACTUAL LOCAL CURRENCY of {destination}'s country (e.g. JPY, VND, THB, MAD, EUR) — never USD. "
+        f"Append an approximate KRW conversion in parentheses. Base the range on realistic local fares for this specific route "
+        f"(consider distance, terrain, tolls) — do not reuse generic global averages.\n"
         f"If a value is unknown, write exactly '-' for that field — do not leave it blank or guess.\n"
-        f"Example: Supratours|Confort|7-18|Standard seating, AC\n"
+        f"Example: Supratours|Confort|120-180 MAD (약 21,000~32,000원)|Standard seating, AC\n"
         f"Output only the data lines. No explanations. No markdown."
     )
     try:
@@ -1686,7 +1689,7 @@ def build_transport_classes_table(services: List[str], destination: str, cat_col
             return ""
         from itertools import groupby
         html = ""
-        headers = ["클래스", "요금 기준 (USD)", "주요 차이점"]
+        headers = ["클래스", "요금 기준 (현지통화)", "주요 차이점"]
         current_service = None
         service_rows: List[Dict] = []
         for line in lines:
@@ -2156,13 +2159,21 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
 
   <h3 style="font-size:clamp(15px,2vw,17px);font-weight:700;color:#0f172a;margin:28px 0 12px 0;">공항에서 시내·목적지까지</h3>
   [공항→목적지 이동 안내 p태그 1개]
+
+  [교통수단 카드 작성 규칙 — 반드시 준수]
+  - 교통수단명은 "셔틀(Shuttle)"처럼 모호한 명칭 금지. 현지 실제 운영 방식으로 구체적으로 분류할 것.
+    예: 현지 정기 대중교통(버스/기차 노선명), 도어투도어 프라이빗 트랜스퍼(사전예약), Uber/Grab 등 현지 주력 승차공유 앱, 일반 미터기 택시, 렌터카 등.
+  - 요금은 반드시 해당 국가의 실제 현지 통화(JPY, VND, THB, EUR, AUD 등)로 표기하고, 괄호 안에 대략적인 원화(KRW) 환산 금액을 병기한다. USD 등 임의 통화 사용 금지.
+  - 요금은 실제 {famous}→{hidden} 구간의 지리적 거리·지형(산악·고속도로 톨게이트·시외 여부)을 고려한 현실적인 범위로 산출한다. 단거리 동네 요금이나 막연한 평균치를 장거리 이동에 적용하지 말 것.
+  - 직접 경험한 것처럼 서술 금지("~해봤다" 등). 다양한 공개 정보를 종합한 객관적 정보 큐레이션 톤 유지.
+
   <div style="display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 20px 0;">
     [교통수단별 카드 2~3개 — 아래 형식 반복]
     <div style="flex:1;min-width:140px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;">
-      <p style="margin:0 0 6px 0;font-size:14px;font-weight:700;color:#0f172a;">[교통수단명]</p>
+      <p style="margin:0 0 6px 0;font-size:14px;font-weight:700;color:#0f172a;">[구체적 교통수단명]</p>
       <p style="margin:0 0 4px 0;font-size:13px;color:#64748b;">소요 [X분/시간]</p>
-      <p style="margin:0 0 4px 0;font-size:13px;color:#64748b;">비용 [금액]</p>
-      <p style="margin:0;font-size:13px;color:#94a3b8;">[한 줄 특징]</p>
+      <p style="margin:0 0 4px 0;font-size:13px;color:#64748b;">비용 [현지통화 금액 (약 KRW 환산금액)]</p>
+      <p style="margin:0;font-size:13px;color:#94a3b8;">[한 줄 특징 — 예약 필요 여부·운행 시간대 등]</p>
     </div>
   </div>
 
