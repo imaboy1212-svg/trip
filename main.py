@@ -2830,7 +2830,7 @@ def run():
         )
 
         def _keyword_caption(kw: str) -> str:
-            return f'<figcaption style="{_KEYWORD_STYLE}">검색어: {kw}</figcaption>'
+            return f'<figcaption style="{_KEYWORD_STYLE}">{kw}</figcaption>'
 
         img_landscape_pair = _pick_from_pool_or_api("featured", orientation="landscape")
         img_portrait_pair  = fetch_travel_image(selected, orientation="portrait", section="portrait", used_urls=used_urls)
@@ -2937,7 +2937,7 @@ def run():
                     famous_media = wp_upload_image(famous_img, famous_fname, alt=f"{famous} 여행")
                     if famous_media and famous_media.get("url"):
                         famous_html = (
-                            f'<figure style="margin:20px 0 24px;">'
+                            f'<figure style="margin:20px 0 24px;text-align:center;">'
                             f'<img src="{famous_media["url"]}" alt="{famous} 여행" '
                             f'style="width:100%;max-width:900px;height:auto;border-radius:12px;object-fit:cover;" />'
                             f'{_keyword_caption(famous_kw)}'
@@ -2982,7 +2982,7 @@ def run():
                     if sec_media and sec_media.get("url"):
                         sec_url = sec_media["url"]
                         sec_html = (
-                            f'<figure style="margin:20px 0 24px;">'
+                            f'<figure style="margin:20px 0 24px;text-align:center;">'
                             f'<img src="{sec_url}" alt="{selected} {section_key}" '
                             f'style="width:100%;max-width:900px;height:auto;border-radius:12px;object-fit:cover;" />'
                             f'{_keyword_caption(sec_kw)}'
