@@ -1468,8 +1468,8 @@ def _build_options_table(rows: List[Dict], title: str, headers: List[str], cat_c
     for i, row in enumerate(rows):
         style = _TABLE_ROW_STYLES[i % 2]
         cells = "".join(
-            f'<td style="padding:10px 14px;vertical-align:top;'
-            f'{"text-align:center;font-weight:600;" if j==0 else ""}">'
+            f'<td style="padding:10px 14px;vertical-align:top;text-align:center;'
+            f'{"font-weight:600;" if j==0 else ""}">'
             f'{(str(v).strip() or "-")}</td>'
             for j, v in enumerate(row.get("cells", []))
         )
