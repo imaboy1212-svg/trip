@@ -818,97 +818,6 @@ def _fetch_url(url: str, used_urls: set, min_bytes: int = 40000) -> Optional[byt
         return None
 
 
-def _serpapi_google_images(query: str, used_urls: set) -> Optional[bytes]:
-    """SerpApi Google Images — 구글 이미지 검색 (여행지 매칭 정확도 최상)."""
-    if not SERPAPI_KEY:
-        return None
-    try:
-        resp = requests.get(
-            "https://serpapi.com/search",
-            params={
-                "engine": "google_images",
-                "q": query,
-                "api_key": SERPAPI_KEY,
-                "hl": "en",
-                "safe": "active",
-                "imgsz": "l",          # 큰 이미지만
-            },
-            timeout=20,
-        )
-        if resp.status_code != 200:
-            return None
-        results = resp.json().get("images_results", [])
-        import random
-        # 상위 결과가 가장 정확 — 상위 15개 안에서만 랜덤 선택해 정확도 유지
-        pool = results[:15]
-        random.shuffle(pool)
-        for item in pool:
-            url = item.get("original", "")
-            if not url or not url.startswith("http"):
-                continue
-            data = _fetch_url(url, used_urls, min_bytes=25000)
-            if data:
-                logger.info(f"[SerpApi GoogleImages] {query[:40]} → {url[:60]}")
-                return data
-    except Exception as e:
-        logger.debug(f"SerpApi Google Images 오류 ({query[:30]}): {e}")
-    return None
-
-
-def _serpapi_maps_photos(destination: str, used_urls: set) -> Optional[bytes]:
-    """SerpApi Google Maps Photos — 구글 지도 내 실사 사진 수집."""
-    if not SERPAPI_KEY:
-        return None
-    try:
-        # 1단계: Google Maps 검색으로 data_id 획득
-        maps_resp = requests.get(
-            "https://serpapi.com/search",
-            params={
-                "engine": "google_maps",
-                "q": destination,
-                "api_key": SERPAPI_KEY,
-                "hl": "en",
-            },
-            timeout=20,
-        )
-        if maps_resp.status_code != 200:
-            return None
-        local_results = maps_resp.json().get("local_results", [])
-        if not local_results:
-            return None
-        data_id = local_results[0].get("data_id", "")
-        if not data_id:
-            return None
-
-        # 2단계: data_id로 Google Maps 사진 조회
-        photos_resp = requests.get(
-            "https://serpapi.com/search",
-            params={
-                "engine": "google_maps_photos",
-                "data_id": data_id,
-                "api_key": SERPAPI_KEY,
-                "hl": "en",
-            },
-            timeout=20,
-        )
-        if photos_resp.status_code != 200:
-            return None
-        photos = photos_resp.json().get("photos", [])
-        import random
-        random.shuffle(photos)
-        for photo in photos[:20]:
-            url = photo.get("image", "") or photo.get("thumbnail", "")
-            if not url or not url.startswith("http"):
-                continue
-            data = _fetch_url(url, used_urls, min_bytes=15000)
-            if data:
-                logger.info(f"[SerpApi GoogleMaps] {destination} → {url[:60]}")
-                return data
-    except Exception as e:
-        logger.debug(f"SerpApi Maps Photos 오류 ({destination}): {e}")
-    return None
-
-
 def _pixabay_search(query: str, used_urls: set) -> Optional[bytes]:
     """Pixabay API — 무료 키 발급 가능 (pixabay.com/api/docs/)."""
     if not PIXABAY_KEY:
@@ -1437,11 +1346,8 @@ def fetch_travel_image(
 
         import random as _rnd
 
-        # 섹션별 소스 순서를 랜덤화해서 다양성 확보
-        # 키 있는 소스들을 앞에 배치 + 셔플
+        # 섹션별 소스 순서를 랜덤화해서 다양성 확보 (SerpApi는 교통 요금 검색 전용으로 예약)
         api_sources_with_key = []
-        if SERPAPI_KEY:
-            api_sources_with_key.append("serpapi")
         if GOOGLE_MAPS_KEY:
             api_sources_with_key.append("google_places")
         _rnd.shuffle(api_sources_with_key)
@@ -1451,13 +1357,6 @@ def fetch_travel_image(
         _rnd.shuffle(shuffled_queries)
 
         for q in shuffled_queries:
-            # 1순위: SerpApi Google Images — 음식·교통 섹션 한정 (매칭 정확도가 특히 중요 + 월 100회 한도 절약)
-            if section in ("food", "transport"):
-                result = _serpapi_google_images(q, used_urls)
-                if result:
-                    span.set_attribute("source", "serpapi_google_images")
-                    span.set_attribute("found_query", q)
-                    return result, q
             # Pexels API (키 있을 때)
             result = _pexels_search(q, orientation, used_urls)
             if result:
@@ -1495,14 +1394,9 @@ def fetch_travel_image(
                 span.set_attribute("found_query", q)
                 return result, q
 
-        # 키 있는 고품질 소스들 (랜덤 순서)
+        # 키 있는 고품질 소스들 (SerpApi는 교통 요금 검색 전용으로 예약 — 사진 검색엔 사용 안 함)
         for src in api_sources_with_key:
-            if src == "serpapi":
-                result = _serpapi_maps_photos(destination, used_urls)
-                if result:
-                    span.set_attribute("source", "serpapi_maps")
-                    return result, destination
-            elif src == "google_places":
+            if src == "google_places":
                 result = _google_places_photos(destination, used_urls)
                 if result:
                     span.set_attribute("source", "google_maps")
