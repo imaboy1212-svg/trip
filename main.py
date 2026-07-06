@@ -510,6 +510,41 @@ def fetch_verified_attractions(destination: str) -> List[Dict]:
     return places
 
 
+def fetch_transport_price_facts(famous: str, hidden: str) -> str:
+    """SerpApi Google 검색 — {famous}↔{hidden} 구간의 실제 교통 요금 정보를 검색해 근거자료로 제공합니다.
+    Gemini가 일반적인 평균치 대신 실제 검색된 시세를 기반으로 요금을 작성하도록 합니다.
+    """
+    if not SERPAPI_KEY:
+        return ""
+    snippets: List[str] = []
+    queries = [
+        f"{famous} to {hidden} shuttle transfer price",
+        f"{famous} to {hidden} taxi fare price",
+        f"{famous} to {hidden} bus price ticket",
+    ]
+    for q in queries:
+        try:
+            resp = requests.get(
+                "https://serpapi.com/search",
+                params={"engine": "google", "q": q, "api_key": SERPAPI_KEY, "hl": "en", "num": 5},
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                continue
+            for item in resp.json().get("organic_results", [])[:4]:
+                snippet = item.get("snippet", "")
+                title = item.get("title", "")
+                if snippet:
+                    snippets.append(f"[{title}] {snippet}")
+        except Exception as e:
+            logger.debug(f"교통 요금 검색 실패 ({q}): {e}")
+    if not snippets:
+        return ""
+    result = "\n".join(f"- {s}" for s in snippets[:12])
+    logger.info(f"[교통요금검색팀] '{famous}↔{hidden}' 검색 결과 {len(snippets)}건 수집")
+    return result
+
+
 def verify_place_exists(place_name: str, destination: str) -> bool:
     """개별 명소 실존 여부를 직접 검색으로 확인.
     포괄 리스트 대조 방식은 오지·정착지명을 놓치므로, 명소 단위로 직접 조회하는 것이 정확합니다.
@@ -1662,15 +1697,21 @@ def build_accommodation_table(hotels: List[str], destination: str, cat_color: st
     return html
 
 
-def build_transport_classes_table(services: List[str], destination: str, cat_color: str) -> str:
-    """교통편 클래스 비교 테이블 HTML 생성 (Gemini로 조회)."""
+def build_transport_classes_table(services: List[str], destination: str, cat_color: str, famous: str = "") -> str:
+    """교통편 클래스 비교 테이블 HTML 생성 (Gemini로 조회, 실시간 검색 근거자료 활용)."""
     if not services or not gemini:
         return ""
     service_list = "\n".join(f"- {s}" for s in services[:3])
+    price_facts = fetch_transport_price_facts(famous, destination) if famous else ""
+    facts_block = (
+        f"[실시간 검색 근거자료]\n{price_facts}\n위 검색 결과에 구체적 요금이 있으면 우선 반영할 것.\n\n"
+        if price_facts else ""
+    )
     prompt = (
         f"For the following transport services relevant to {destination}, "
         f"list the available seat/cabin classes in order from lowest to highest tier.\n"
         f"{service_list}\n\n"
+        f"{facts_block}"
         f"For each service and class, output exactly 4 fields separated by '|' — no more, no fewer:\n"
         f"ServiceName|ClassName|PriceRange|KeyDifferences\n"
         f"ServiceName = the company/service name only (e.g. 'Supratours'). Do NOT add a separate vehicle-type field.\n"
@@ -1848,6 +1889,7 @@ def build_prompt(data_famous: Dict, data_hidden: Dict, style_guide: str, contine
     famous = data_famous["destination"]
     hidden = data_hidden["destination"]
     dest   = hidden  # 심층 탐구 대상 = 숨은 여행지
+    transport_price_facts = fetch_transport_price_facts(famous, hidden)
     maps_embed = (
         f'<iframe src="https://maps.google.com/maps?q={quote(hidden)}&z=11&output=embed" '
         f'width="100%" height="300" style="border:0;border-radius:12px;margin-top:12px;" '
@@ -1938,6 +1980,11 @@ def build_prompt(data_famous: Dict, data_hidden: Dict, style_guide: str, contine
 [검증된 사실 정보 — 반드시 이 값을 그대로 사용, 임의로 다른 값 지어내기 금지]
 {country_facts_block}
 {verified_attractions_block}
+
+[교통 요금 실시간 검색 근거자료 — {famous}↔{hidden} 구간]
+{transport_price_facts if transport_price_facts else "검색 결과 없음 — 막연한 평균치로 지어내지 말고, 확신이 없으면 범위를 넓게 잡거나 '-'로 표기할 것"}
+위 검색 결과에 구체적인 요금이 있으면 그 수치를 우선 사용하고, 정기 노선버스/공유셔틀/프라이빗 전세/택시 등 서비스 종류가 다르면 반드시 구분해서 각각 표기한다.
+검색 결과가 부족해도 동네 단거리 요금을 장거리 구간에 그대로 적용하지 말 것.
 
 [절대 금지 사항]
 - 이모티콘(Emoji) 사용 전면 금지 (제목·본문 모두)
@@ -2840,7 +2887,7 @@ def run():
             accommodation_table = ""
         try:
             transport_classes_table = build_transport_classes_table(
-                content.get("transport_services", []), selected, CAT_COLOR
+                content.get("transport_services", []), selected, CAT_COLOR, content.get("famous", "")
             )
         except Exception as e:
             logger.warning(f"교통 등급 테이블 생성 실패: {e}")
