@@ -362,11 +362,12 @@ def fetch_trending_destinations(published: Optional[set] = None) -> List[str]:
             f"Candidate pool (can use or ignore): {', '.join(pool[:20])}\n\n"
             f"Select 6 destination PAIRS from {continent}. Each pair = Famous City | Hidden Gem.\n\n"
             f"Rules:\n"
-            f"- Famous City: a well-known destination Koreans actively search for (e.g. Chiang Mai, Kyoto, Lisbon, Marrakech)\n"
-            f"  NOT the single biggest capital (avoid Paris, Tokyo, Bangkok, Rome, London, New York)\n"
+            f"- Famous City: prioritize the MOST-SEARCHED, highest-traffic tourist destinations Koreans actually look up "
+            f"  (e.g. Paris, Tokyo, Bangkok, Rome, London, Kyoto, Bali, Da Nang, Osaka, Prague) — do NOT avoid major capitals, "
+            f"  these high-search-volume cities are the priority, not an exception\n"
             f"- Hidden Gem: a lesser-known destination reachable from the Famous City within ~3 hours\n"
             f"  that has real travel appeal but thin Korean blog coverage\n"
-            f"  (e.g. Chiang Mai | Pai, Kyoto | Amanohashidate, Marrakech | Aït Benhaddou)\n"
+            f"  (e.g. Kyoto | Amanohashidate, Marrakech | Aït Benhaddou, Bangkok | Amphawa)\n"
             f"- Avoid already-published destinations above\n"
             f"- Both destinations must be in the same country or very nearby region\n\n"
             f"Reply with exactly 6 pairs — one per line in format 'Famous City | Hidden Gem', nothing else."
@@ -1843,12 +1844,12 @@ def build_prompt(data_famous: Dict, data_hidden: Dict, style_guide: str, contine
 [오늘의 여행지 컨텍스트]
 오늘은 {continent_label} 특집입니다.
 이 포스팅은 두 여행지를 연계하여 소개합니다.
-- 유명 여행지: {famous} (많은 한국 여행자가 방문하는 곳 — 핵심만 간략히 소개)
+- 유명 여행지: {famous} (한국인이 가장 많이 검색하는 인기 여행지 — 검색 유입의 핵심이므로 명소·매력을 충실히 소개)
 - 연계 여행지: {hidden} (아직 잘 알려지지 않은 숨은 보석 — 심층 탐구)
-포스팅의 핵심 가치: "{famous}를 방문한 김에 {hidden}까지 가보면 어떨까?" 라는 발견의 즐거움 제공
+포스팅의 핵심 가치: "모두가 아는 {famous}, 그리고 그 안에서도 아는 사람만 아는 {hidden}" — {famous} 자체의 매력과 발견의 즐거움을 함께 제공
 
 [분량 제한 — 반드시 준수]
-- 본문 HTML 총 글자 수 5,000자 이하 (HTML 태그 포함)
+- 본문 HTML 총 글자 수 5,500자 이하 (HTML 태그 포함)
 - H2 섹션 최대 5개, H3 최대 3개 (전체 섹션 8개 이하)
 - 표(table) 최대 2개 — 기본정보표 + 일정표만 허용
 - 교통 수단 비교는 표 금지 → 카드형 div로 대체
@@ -2003,16 +2004,17 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
 --- PART 1. 유명 여행지 핵심 안내 ---
 <div style="margin-bottom:56px;padding-top:40px;border-top:1px solid #e2e8f0;">
   {{PICTOGRAM:attraction}}
-  <h2 style="font-size:clamp(18px,3vw,22px);font-weight:800;color:#0f172a;margin:8px 0;line-height:1.4;">{famous} — 떠나기 전 꼭 알아야 할 것들</h2>
+  <h2 style="font-size:clamp(18px,3vw,22px);font-weight:800;color:#0f172a;margin:8px 0;line-height:1.4;">{famous}, 왜 모두가 사랑하는가</h2>
   <p style="font-size:15px;color:#94a3b8;font-weight:600;margin:0 0 16px 0;">[{famous} 한 줄 매력 포인트]</p>
   {{PHOTO:famous}}
 
-  [도입 p태그 1~2개 — {famous}의 전반적 매력과 방문 가치를 간결하게 서술]
+  [도입 p태그 2개 — {famous}가 한국인에게 특히 사랑받는 이유와 방문 가치를 구체적으로 서술. 검색 유입 핵심 여행지이므로 성의 있게 작성]
 
-  <h3 style="font-size:clamp(15px,2vw,17px);font-weight:700;color:#0f172a;margin:28px 0 12px 0;">{famous}에서 놓치면 안 될 핵심 명소 3선</h3>
+  <h3 style="font-size:clamp(15px,2vw,17px);font-weight:700;color:#0f172a;margin:28px 0 12px 0;">{famous}에서 놓치면 안 될 핵심 명소 4선</h3>
   <p>[명소A (영문명): 위치·특징·실용정보 — 1~2줄로 간결하게]</p>
   <p>[명소B (영문명): 위치·특징·실용정보]</p>
   <p>[명소C (영문명): 위치·특징·실용정보]</p>
+  <p>[명소D (영문명): 위치·특징·실용정보]</p>
 
   <h3 style="font-size:clamp(15px,2vw,17px);font-weight:700;color:#0f172a;margin:28px 0 12px 0;">{famous} 기본 이동 정보</h3>
   [입국 및 시내 이동 p태그 1~2개 — 공항명, 시내 이동 수단 간략 안내]
@@ -2198,8 +2200,10 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
 아래 규칙으로 제목을 작성하세요.
 - 두 여행지명은 반드시 한국어로만 표기 (영어 원어 병기 절대 금지. 예: "치앙마이" O, "치앙마이(Chiang Mai)" X, "자이언 내로우즈 (Zion Narrows)" X)
 - 잘 알려지지 않은 지명이라도 괄호 안에 영문명을 덧붙이지 말 것. 한국어 표기만으로 제목을 완성할 것
-- 두 여행지를 모두 자연스럽게 담은 감성적 한국어 문장
+- {famous}(유명 여행지)를 제목 앞부분에 배치하여 검색 키워드로서 명확히 노출할 것 — SEO상 {famous} 지명이 제목에 반드시 온전한 형태로 포함되어야 함
 - "여행 완전 정복", "총정리", "가이드" 같은 정보성 표현 금지
+- 강한 후킹 필수: {hidden}의 가장 경이롭거나 압도적인 장면(풍경·순간·감정)을 한 장면으로 떠올리게 하는 감성적 문구를 사용해,
+  그 구절만 보고도 클릭하고 싶어지게 만들 것. 과장된 거짓 정보나 낚시성 문구(내용과 무관한 자극적 표현)는 금지 — 실제 본문 내용과 반드시 일치해야 함
 - "너머", "이끄는", "감춰둔", "숨겨진", "한 발 더" 같은 상투적 연결어를 매번 반복하지 말 것 — 아래 서로 다른 문형 중 이번 글에는 아직 안 써본 것을 골라 변주할 것
   1) 질문형: "치앙마이 다음은 어디일까, 파이"
   2) 대비형: "화려한 교토와 고요한 아마노하시다테"
@@ -2208,6 +2212,7 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
   5) 한 줄 정의형: "파이, 치앙마이가 숨쉬는 산속 마을"
   6) 발견 서사형: "지도에 없던 마을, 아이트 벤 하두"
   7) 병렬 명사형: "교토의 절, 아마노하시다테의 바다"
+  8) 경이 장면 후킹형: "교토에서 두 시간, 하늘과 바다가 맞닿는 곳"
 - 30자 이내로 간결하게
 [/TITLE]
 [COUNTRY_KR]{famous}가 속한 국가명을 한국어로 (최대 6자, 예: 태국, 모로코, 뉴질랜드)[/COUNTRY_KR]
