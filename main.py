@@ -360,17 +360,21 @@ def fetch_trending_destinations(published: Optional[set] = None) -> List[str]:
             f"Today's featured continent/region: {continent}\n\n"
             f"Already published destinations (MUST AVOID): {published_list}\n\n"
             f"Candidate pool (can use or ignore): {', '.join(pool[:20])}\n\n"
-            f"Select 6 destination PAIRS from {continent}. Each pair = Famous City | Hidden Gem.\n\n"
+            f"Select 6 destination PAIRS from {continent}. Each pair = Gateway City | Specific Spot.\n\n"
             f"Rules:\n"
-            f"- Famous City: prioritize the MOST-SEARCHED, highest-traffic tourist destinations Koreans actually look up "
-            f"  (e.g. Paris, Tokyo, Bangkok, Rome, London, Kyoto, Bali, Da Nang, Osaka, Prague) — do NOT avoid major capitals, "
-            f"  these high-search-volume cities are the priority, not an exception\n"
-            f"- Hidden Gem: a lesser-known destination reachable from the Famous City within ~3 hours\n"
-            f"  that has real travel appeal but thin Korean blog coverage\n"
-            f"  (e.g. Kyoto | Amanohashidate, Marrakech | Aït Benhaddou, Bangkok | Amphawa)\n"
-            f"- Avoid already-published destinations above\n"
-            f"- Both destinations must be in the same country or very nearby region\n\n"
-            f"Reply with exactly 6 pairs — one per line in format 'Famous City | Hidden Gem', nothing else."
+            f"- Gateway City: the MOST-SEARCHED, highest-traffic major city Koreans actually look up "
+            f"  (e.g. Tokyo, Paris, Bangkok, Rome, London, Kyoto, Osaka, Prague) — do NOT avoid major capitals, "
+            f"  these high-search-volume cities are the priority. The same Gateway City MAY repeat across different pairs "
+            f"  (e.g. Tokyo can appear multiple times paired with different specific spots) since it is only used as travel context.\n"
+            f"- Specific Spot: NOT a whole city, region, or broad area — must be ONE narrow, concrete place: "
+            f"  a single neighborhood/district, a specific attraction, a small town, or one national park/temple/market, "
+            f"  reachable from the Gateway City within ~3 hours "
+            f"  (e.g. Tokyo | Nikko, Tokyo | Kamakura, Tokyo | Odaiba, Tokyo | Yanaka Ginza, Bangkok | Amphawa Floating Market)\n"
+            f"- This Specific Spot is the actual subject of the article — it must be narrow enough that a full article "
+            f"  can go deep on it without feeling stretched thin (avoid selecting an entire city or province as the Specific Spot)\n"
+            f"- Avoid already-published Specific Spots above (the Gateway City itself repeating is fine, only the Specific Spot must be new)\n"
+            f"- Both places must be in the same country or very nearby region\n\n"
+            f"Reply with exactly 6 pairs — one per line in format 'Gateway City | Specific Spot', nothing else."
         )
 
         try:
@@ -1626,22 +1630,33 @@ def build_transport_classes_table(services: List[str], destination: str, cat_col
         lines = [l.strip() for l in resp.text.strip().splitlines() if l.count("|") == 3]
         if not lines:
             return ""
-        from itertools import groupby
         html = ""
         headers = ["클래스", "요금 기준 (현지통화)", "주요 차이점"]
+        fallback_price = "요금 확인 필요"
+
+        def _flush(svc: str, rows: List[Dict]) -> str:
+            if not rows:
+                return ""
+            # 모든 클래스의 요금이 전부 확인 불가면 표 대신 한 줄 문장으로 축약 (같은 문구 반복 방지)
+            if all(fallback_price in r["cells"][1] for r in rows):
+                class_names = ", ".join(r["cells"][0] for r in rows)
+                return (
+                    f'<p style="font-size:14px;color:#64748b;margin:12px 0;">'
+                    f'{svc} ({class_names}) 요금은 예약 시점에 따라 변동이 커서, 현지 공식 사이트에서 직접 확인하시길 권장합니다.</p>'
+                )
+            return _build_options_table(rows, f"{svc} 클래스 비교", headers, cat_color)
+
         current_service = None
         service_rows: List[Dict] = []
         for line in lines:
             parts = [p.strip() for p in line.split("|")]
             svc, cls_name, price, diff = parts[0], parts[1], parts[2], parts[3]
             if svc != current_service:
-                if current_service and service_rows:
-                    html += _build_options_table(service_rows, f"{current_service} 클래스 비교", headers, cat_color)
+                html += _flush(current_service, service_rows)
                 current_service = svc
                 service_rows = []
             service_rows.append({"cells": [cls_name, price, diff]})
-        if current_service and service_rows:
-            html += _build_options_table(service_rows, f"{current_service} 클래스 비교", headers, cat_color)
+        html += _flush(current_service, service_rows)
         return html
     except Exception as e:
         logger.warning(f"교통 클래스 조회 실패: {e}")
@@ -1843,10 +1858,12 @@ def build_prompt(data_famous: Dict, data_hidden: Dict, style_guide: str, contine
 
 [오늘의 여행지 컨텍스트]
 오늘은 {continent_label} 특집입니다.
-이 포스팅은 두 여행지를 연계하여 소개합니다.
-- 유명 여행지: {famous} (한국인이 가장 많이 검색하는 인기 여행지 — 검색 유입의 핵심이므로 명소·매력을 충실히 소개)
-- 연계 여행지: {hidden} (아직 잘 알려지지 않은 숨은 보석 — 심층 탐구)
-포스팅의 핵심 가치: "모두가 아는 {famous}, 그리고 그 안에서도 아는 사람만 아는 {hidden}" — {famous} 자체의 매력과 발견의 즐거움을 함께 제공
+이 글의 실제 주제는 {hidden} 단 하나입니다. {famous}는 "{hidden}에 가려면 거쳐야 하는 관문 도시"로서 접근 경로 설명에만 짧게 등장합니다.
+- {famous} (게이트웨이 도시, 한국인이 많이 검색하는 인기 도시): 본문에서 별도 섹션을 차지하지 않고, 교통 안내 문맥에서 "이 도시를 통해 들어간다" 정도로만 언급
+- {hidden} (이 글의 진짜 주인공, 특정 관광지·지역 단위): 본문 전체 분량의 대부분을 차지하는 심층 탐구 대상
+포스팅의 핵심 가치: "{famous} 여행 중이라면 꼭 들러야 할 {hidden}"이라는 구체적인 근교 나들이 정보 제공.
+{famous}는 같은 도시가 여러 글에서 반복 등장할 수 있으므로(예: {famous}는 다른 글에서 다른 지역과도 짝지어질 수 있음),
+이 글에서 {famous} 자체를 깊게 다루지 말 것 — 대신 {hidden}이라는 좁고 구체적인 장소에 집중할 것.
 
 [분량 제한 — 반드시 준수]
 - 본문 HTML 총 글자 수 5,500자 이하 (HTML 태그 포함)
@@ -2001,29 +2018,10 @@ def build_prompt(data_famous: Dict, data_hidden: Dict, style_guide: str, contine
 H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
 강조: <span style="background-color:{CAT_LIGHT_BG};padding:2px 6px;color:{CAT_COLOR};font-weight:700;">강조 텍스트</span>
 
---- PART 1. 유명 여행지 핵심 안내 ---
-<div style="margin-bottom:56px;padding-top:40px;border-top:1px solid #e2e8f0;">
-  {{PICTOGRAM:attraction}}
-  <h2 style="font-size:clamp(18px,3vw,22px);font-weight:800;color:#0f172a;margin:8px 0;line-height:1.4;">{famous}, 왜 모두가 사랑하는가</h2>
-  <p style="font-size:15px;color:#94a3b8;font-weight:600;margin:0 0 16px 0;">[{famous} 한 줄 매력 포인트]</p>
-  {{PHOTO:famous}}
-
-  [도입 p태그 2개 — {famous}가 한국인에게 특히 사랑받는 이유와 방문 가치를 구체적으로 서술. 검색 유입 핵심 여행지이므로 성의 있게 작성]
-
-  <h3 style="font-size:clamp(15px,2vw,17px);font-weight:700;color:#0f172a;margin:28px 0 12px 0;">{famous}에서 놓치면 안 될 핵심 명소 4선</h3>
-  <p>[명소A (영문명): 위치·특징·실용정보 — 1~2줄로 간결하게]</p>
-  <p>[명소B (영문명): 위치·특징·실용정보]</p>
-  <p>[명소C (영문명): 위치·특징·실용정보]</p>
-  <p>[명소D (영문명): 위치·특징·실용정보]</p>
-
-  <h3 style="font-size:clamp(15px,2vw,17px);font-weight:700;color:#0f172a;margin:28px 0 12px 0;">{famous} 기본 이동 정보</h3>
-  [입국 및 시내 이동 p태그 1~2개 — 공항명, 시내 이동 수단 간략 안내]
-</div>
-
---- 연결 브릿지 ---
+--- 접근 경로 안내 (게이트웨이 도시는 여기서만 짧게 언급, 별도 섹션·명소 소개 없음) ---
 <div style="background:{CAT_LIGHT_BG};border:1px solid {CAT_LIGHT_BORDER};border-radius:16px;padding:24px 28px;margin:0 0 48px 0;">
-  <p style="margin:0 0 8px 0;font-size:13px;font-weight:800;color:{CAT_COLOR};letter-spacing:0.05em;">{famous}에서 한 발 더</p>
-  <p style="margin:0;font-size:15px;color:#334155;line-height:1.8;">[{famous}에서 {hidden}까지 이동 방법·소요 시간·비용을 구체적으로 서술. "버스로 약 X시간" 또는 "차량으로 X분" 형태로 명시.]</p>
+  <p style="margin:0 0 8px 0;font-size:13px;font-weight:800;color:{CAT_COLOR};letter-spacing:0.05em;">{famous} 여행 중이라면</p>
+  <p style="margin:0;font-size:15px;color:#334155;line-height:1.8;">[{famous}에 입국/도착한다는 전제 하에, {famous}에서 {hidden}까지 이동 방법·소요 시간·비용을 구체적으로 서술. "버스로 약 X시간" 또는 "차량으로 X분" 형태로 명시. {famous} 자체의 명소는 언급하지 말 것 — 오직 이동 경로 정보만.]</p>
 </div>
 
 [[[AD_IN_ARTICLE]]]
@@ -2198,21 +2196,20 @@ H2 번호 금지. 포커스 키워드는 H2 전체에서 최대 1회.
 [응답 형식 — 맨 끝에 순서대로 출력]
 [TITLE]
 아래 규칙으로 제목을 작성하세요.
-- 두 여행지명은 반드시 한국어로만 표기 (영어 원어 병기 절대 금지. 예: "치앙마이" O, "치앙마이(Chiang Mai)" X, "자이언 내로우즈 (Zion Narrows)" X)
-- 잘 알려지지 않은 지명이라도 괄호 안에 영문명을 덧붙이지 말 것. 한국어 표기만으로 제목을 완성할 것
-- {famous}(유명 여행지)를 제목 앞부분에 배치하여 검색 키워드로서 명확히 노출할 것 — SEO상 {famous} 지명이 제목에 반드시 온전한 형태로 포함되어야 함
+- 이 글의 실제 주제는 {hidden}(특정 관광지·지역)이다. {famous}(게이트웨이 도시)는 "{famous} 여행 중 가볼 만한 곳"이라는 맥락으로만 언급 — 두 지명을 대등하게 병렬 나열하지 말 것 (예: "{famous}와 {hidden}" 형태 금지)
+- 지명 표기는 반드시 "한글명(영문명)" 형식으로 일관되게 통일할 것. 매번 같은 지명은 같은 표기 방식을 유지 (한 번은 영어만, 한 번은 한글만 쓰는 등 혼용 금지)
+  예: "닛코(Nikko)", "아마노하시다테(Amanohashidate)" — {famous}, {hidden} 모두 이 형식 적용
 - "여행 완전 정복", "총정리", "가이드" 같은 정보성 표현 금지
 - 강한 후킹 필수: {hidden}의 가장 경이롭거나 압도적인 장면(풍경·순간·감정)을 한 장면으로 떠올리게 하는 감성적 문구를 사용해,
   그 구절만 보고도 클릭하고 싶어지게 만들 것. 과장된 거짓 정보나 낚시성 문구(내용과 무관한 자극적 표현)는 금지 — 실제 본문 내용과 반드시 일치해야 함
-- "너머", "이끄는", "감춰둔", "숨겨진", "한 발 더" 같은 상투적 연결어를 매번 반복하지 말 것 — 아래 서로 다른 문형 중 이번 글에는 아직 안 써본 것을 골라 변주할 것
-  1) 질문형: "치앙마이 다음은 어디일까, 파이"
-  2) 대비형: "화려한 교토와 고요한 아마노하시다테"
-  3) 감각·계절형: "마라케시의 노을, 아이트 벤 하두의 새벽"
-  4) 동사형: "리스본을 걷다, 신트라에 머물다"
-  5) 한 줄 정의형: "파이, 치앙마이가 숨쉬는 산속 마을"
-  6) 발견 서사형: "지도에 없던 마을, 아이트 벤 하두"
-  7) 병렬 명사형: "교토의 절, 아마노하시다테의 바다"
-  8) 경이 장면 후킹형: "교토에서 두 시간, 하늘과 바다가 맞닿는 곳"
+- "너머", "이끄는", "감춰둔", "숨겨진", "한 발 더" 같은 상투적 연결어를 매번 반복하지 말 것 — 아래 서로 다른 문형 중 이번 글에는 아직 안 써본 것을 골라 변주할 것 (모두 {famous}는 맥락, {hidden}이 주인공인 구조)
+  1) 여행 중 발견형: "{famous} 여행 중이라면, 닛코(Nikko)에 들러야 하는 이유"
+  2) 근교형: "{famous}에서 2시간, 닛코(Nikko)의 붉은 다리"
+  3) 감각·계절형: "닛코(Nikko), 단풍이 산 전체를 태우는 곳"
+  4) 동사형: "닛코(Nikko)를 걷다, {famous}와는 다른 하루"
+  5) 한 줄 정의형: "닛코(Nikko), {famous} 근교에 숨은 신사 마을"
+  6) 발견 서사형: "{famous}만 보고 왔다면 놓친 곳, 닛코(Nikko)"
+  7) 경이 장면 후킹형: "폭포와 삼나무 숲 사이, 닛코(Nikko)의 아침"
 - 30자 이내로 간결하게
 [/TITLE]
 [COUNTRY_KR]{famous}가 속한 국가명을 한국어로 (최대 6자, 예: 태국, 모로코, 뉴질랜드)[/COUNTRY_KR]
@@ -2938,26 +2935,27 @@ def run():
 
         if "{PHOTO:famous}" in content["body"]:
             try:
-                famous_pair = fetch_travel_image(famous, orientation="landscape", section="attraction", used_urls=used_urls)
+                # 이제 글의 실제 주인공은 hidden(특정 관광지)이므로 대표 이미지도 hidden 기준으로 검색
+                famous_pair = fetch_travel_image(selected, orientation="landscape", section="attraction", used_urls=used_urls)
                 if famous_pair:
                     famous_img, famous_kw = famous_pair
                     try:
                         famous_img = crop_to_ratio(famous_img, width=900, height=500)
                     except Exception:
                         pass
-                    famous_fname = f"{famous.lower().replace(' ', '_')}_famous_{today}.jpg"
-                    famous_media = wp_upload_image(famous_img, famous_fname, alt=f"{famous} 여행")
+                    famous_fname = f"{selected.lower().replace(' ', '_')}_main_{today}.jpg"
+                    famous_media = wp_upload_image(famous_img, famous_fname, alt=f"{selected} 여행")
                     if famous_media and famous_media.get("url"):
                         famous_html = (
                             f'<figure style="margin:20px 0 24px;text-align:center;">'
-                            f'<img src="{famous_media["url"]}" alt="{famous} 여행" '
+                            f'<img src="{famous_media["url"]}" alt="{selected} 여행" '
                             f'style="width:100%;max-width:900px;height:auto;border-radius:12px;object-fit:cover;" />'
                             f'{_keyword_caption(famous_kw)}'
                             f'</figure>'
                         )
                         content["body"] = content["body"].replace("{PHOTO:famous}", famous_html)
             except Exception as e:
-                logger.warning(f"유명 여행지 이미지 실패: {e}")
+                logger.warning(f"대표 이미지 실패: {e}")
             content["body"] = content["body"].replace("{PHOTO:famous}", "")
 
         for section_key in ("attraction", "attraction2", "attraction3", "food", "transport", "tips"):
