@@ -20,10 +20,20 @@ try:
 except ImportError:
     pass
 
+import socket
 import requests
+import urllib3.util.connection as urllib3_conn
 from bs4 import BeautifulSoup
 from PIL import Image
 import google.generativeai as genai
+
+# PythonAnywhere는 아웃바운드 IPv6를 지원하지 않아 IPv6 DNS 응답이 오면
+# "Network is unreachable"로 실패한다. requests/urllib3가 항상 IPv4로만
+# 연결하도록 강제해 이 문제를 우회한다.
+def _allowed_gai_family():
+    return socket.AF_INET
+
+urllib3_conn.allowed_gai_family = _allowed_gai_family
 
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
