@@ -418,7 +418,275 @@ def fetch_trending_destinations(published: Optional[set] = None) -> List[str]:
 
 
 # ==========================================
-# 8. 가이드북 스타일 추출
+# 7.5 실용정보 체크리스트 주제 발굴 (trip.com식 총정리형)
+# ==========================================
+
+_PRACTICAL_TOPIC_TYPES = [
+    "여행 준비물 총정리",
+    "유심·이심·로밍 완벽정리",
+    "여행자보험 가입 가이드",
+    "항공권 & 호텔 예약 총정리",
+    "입장권 & 근처 명소 총정리",
+    "현지 교통 & 패스 완벽정리",
+    "환전 & 카드 사용법 총정리",
+]
+
+_PRACTICAL_DEST_POOL: Dict[str, List[str]] = {
+    "Asia": ["일본", "태국", "베트남", "대만", "필리핀", "싱가포르", "말레이시아", "발리"],
+    "Europe": ["프랑스", "이탈리아", "스페인", "영국", "스위스", "체코", "그리스", "포르투갈"],
+    "North America": ["미국", "캐나다", "멕시코"],
+    "South America": ["페루", "브라질", "아르헨티나"],
+    "Africa": ["모로코", "이집트", "남아프리카공화국"],
+    "Oceania": ["호주", "뉴질랜드", "괌", "사이판"],
+    "Special Destinations": ["몰디브", "두바이", "터키", "아이슬란드"],
+}
+
+
+def is_topic_already_published(destination: str, topic: str, published: set) -> bool:
+    """목적지+주제 조합이 이미 다뤄졌는지 대략 확인 (제목/슬러그 substring 매칭)."""
+    dest_lower = destination.lower()
+    topic_key = topic.split(" ")[0].lower()
+    return any(dest_lower in item and topic_key in item for item in published)
+
+
+def fetch_practical_topics(published: Optional[set] = None) -> List[Dict[str, str]]:
+    """실용정보/체크리스트형 콘텐츠를 위한 '목적지 + 주제' 조합을 발굴합니다.
+    트립닷컴 블로그식 총정리형 포맷 — 스토리텔링이 아니라 여행 준비 과정에서
+    실제로 검색하는 실무 정보(준비물·유심·보험·항공권 등)를 다룹니다.
+    """
+    with tracer.start_as_current_span("fetch_practical_topics") as span:
+        continent = get_today_continent()
+        span.set_attribute("continent", continent)
+        pool = _PRACTICAL_DEST_POOL.get(continent, [])
+        published_list = ", ".join(list(published)[:30]) if published else "없음"
+
+        prompt = (
+            f"당신은 한국 여행객을 대상으로 하는 여행 콘텐츠 전략가입니다.\n\n"
+            f"오늘의 대륙: {continent}\n"
+            f"후보 목적지 풀: {', '.join(pool)}\n"
+            f"이미 다룬 '목적지+주제' 조합 (반드시 피할 것): {published_list}\n\n"
+            f"6개의 '목적지 | 실용주제' 조합을 선정하세요.\n\n"
+            f"규칙:\n"
+            f"- 목적지: 한국인이 실제로 많이 검색하는 나라 또는 대표 도시 (예: 일본, 태국, 발리, 파리)\n"
+            f"- 실용주제: 여행 '준비 과정'에서 실제로 검색하는 실무 정보 하나. "
+            f"예시: 여행 준비물, 유심·이심, 여행자보험, 항공권&호텔 예약, 입장권&근처 명소, 현지교통&패스, 환전&카드\n"
+            f"- 스토리텔링/관광 소개가 아니라 '검색하면 바로 답을 얻고 싶은' 실용 정보여야 함\n"
+            f"- 이미 다룬 조합은 피하고, 같은 목적지라도 다른 주제면 사용 가능\n\n"
+            f"6줄, 한 줄에 하나씩 '목적지 | 실용주제' 형식으로만 답하세요."
+        )
+
+        try:
+            resp = gemini.generate_content(prompt)
+            topics = []
+            for line in resp.text.strip().splitlines():
+                line = re.sub(r'^[\d\.\-\)\s]+', '', line).strip()
+                line = re.sub(r'["""\'*]', '', line).strip()
+                if '|' in line:
+                    parts = [p.strip() for p in line.split('|', 1)]
+                    if len(parts) == 2 and all(parts):
+                        topics.append({"destination": parts[0], "topic": parts[1]})
+            if topics:
+                logger.info(f"Gemini 발굴 실용주제 ({continent}): {topics}")
+                span.set_attribute("source", f"gemini+{continent}")
+                return topics[:6]
+        except Exception as e:
+            logger.warning(f"Gemini 실용주제 발굴 실패: {e}")
+
+        import random
+        fallback_dest = pool.copy() or ["일본", "태국", "베트남"]
+        random.shuffle(fallback_dest)
+        fallback_topics = _PRACTICAL_TOPIC_TYPES.copy()
+        random.shuffle(fallback_topics)
+        span.set_attribute("source", "pool_fallback")
+        logger.warning(f"Gemini 실패 — pool fallback ({continent})")
+        return [
+            {"destination": d, "topic": t}
+            for d, t in zip(fallback_dest, fallback_topics)
+        ][:6]
+
+
+def build_checklist_prompt(destination: str, topic: str, continent: str = "") -> str:
+    year = datetime.now().year
+    coupang_block = "" if not COUPANG_LINK else (
+        f'<div style="margin:32px 0;padding:24px 28px;background:#fff7ed;'
+        f'border:1px solid #fed7aa;border-radius:16px;">'
+        f'<p style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#ea580c;letter-spacing:0.05em;">'
+        f'{destination} 여행 준비물</p>'
+        f'<p style="margin:0 0 16px 0;font-size:14px;color:#78350f;line-height:1.7;">'
+        f'출발 전 챙겨야 할 필수 아이템을 한곳에서 확인할 수 있습니다. '
+        f'캐리어·보조배터리·여행 파우치 등 여행에 꼭 필요한 준비물을 미리 점검하세요.</p>'
+        f'<a href="{COUPANG_LINK}" target="_blank" rel="nofollow sponsored" '
+        f'style="display:inline-block;background:#ea580c;color:#fff;font-size:14px;'
+        f'font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;">'
+        f'여행 필수템 보러가기</a>'
+        f'</div>'
+    )
+    coupang_disclosure = "" if not COUPANG_LINK else (
+        '<p style="margin-top:24px;font-size:12px;color:#94a3b8;text-align:center;line-height:1.8;">'
+        '이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.</p>'
+    )
+
+    return f"""
+당신은 trip.bestwellth.org의 여행 실용정보 에디터입니다.
+아래 [목적지]와 [주제]를 바탕으로 '체크리스트/총정리형' 블로그 포스팅 HTML을 작성하세요.
+참고 스타일: 트립닷컴 블로그처럼 목차(TOC) + 소제목별 이미지 1장 + 캐주얼한 말투 + 핵심 키워드 형광펜 강조.
+
+[목적지] {destination}
+[주제] {topic}
+[오늘의 대륙] {continent or '전 세계'}
+
+[문체]
+- 친근하고 캐주얼한 존댓말 ("~해요", "~하죠", "~해주세요")
+- 이모지는 문단당 최대 1개까지만 자연스럽게 사용 (과도한 사용 금지, 제목에는 사용하지 않음)
+- 정보는 정확하고 실용적으로 — 지어낸 수치·금액 절대 금지
+- Markdown 기호(**, ##, -, *) 본문 삽입 금지
+
+[절대 금지 사항]
+- 개인 일기·경험 형식 금지 ("저는 다녀왔습니다" 등 — 정보 제공자 시점 유지, "~해요" 톤은 허용)
+- 본문에 외부 링크(href 포함 a태그) 직접 삽입 금지
+- 불확실한 가격·정책을 단정적으로 서술 금지 — "항공사/현지 정책에 따라 다를 수 있다"는 식으로 안내
+- [SECTIONS] 태그의 소제목·개수는 본문 h2와 정확히 1:1 대응해야 함 (누락·추가 금지)
+
+[HTML 구조 — 반드시 이 순서로]
+
+카테고리 색상: {CAT_COLOR} | 라이트 배경: {CAT_LIGHT_BG} | 라이트 테두리: {CAT_LIGHT_BORDER}
+
+--- 1. 카테고리 뱃지 ---
+<div style="display:inline-block;background:{CAT_LIGHT_BG};color:{CAT_COLOR};font-size:13px;font-weight:700;padding:4px 14px;border-radius:20px;margin-bottom:14px;">여행 준비 가이드 · {destination}</div>
+
+--- 2. 인트로 (친근한 톤, 이모지 소량) ---
+<p style="font-size:16px;color:#334155;line-height:1.9;margin-bottom:8px;">[{destination} 여행을 준비한다면 미리 챙겨야 할 것들을 정리해드릴게요. 이 주제가 왜 중요한지 2~3문장으로 자연스럽게 설명]</p>
+
+--- 3. 목차(TOC) 박스 ---
+<div style="background:#f8fafc;padding:24px 28px;border-radius:16px;border:1px solid #e2e8f0;margin:24px 0 40px 0;">
+  <p style="margin:0 0 14px 0;font-size:14px;font-weight:800;color:#0f172a;">목차</p>
+  <ul style="list-style:none;padding:0;margin:0;">
+    [소제목 li 태그 5~7개 — 아래 [SECTIONS]와 정확히 동일한 순서·문구로 작성. 형식: <li style="font-size:14px;color:#334155;line-height:2.0;">— [소제목]</li>]
+  </ul>
+</div>
+
+{coupang_block}
+
+[[[AD_DISPLAY]]]
+
+--- 4. 본문 섹션 (5~7개, [SECTIONS]와 1:1 정확히 대응) ---
+아래 블록을 섹션 개수만큼 반복하되 {{PHOTO:section_N}}의 N은 1부터 순서대로 증가시킬 것:
+<div style="margin-bottom:44px;">
+  <h2 style="font-size:clamp(18px,3vw,21px);font-weight:800;color:#0f172a;margin:0 0 16px 0;">[소제목]</h2>
+  {{PHOTO:section_N}}
+  <p style="font-size:15px;color:#334155;line-height:1.9;margin-bottom:12px;">[본문 — 핵심 키워드는 <span style="background-color:{CAT_LIGHT_BG};padding:2px 6px;color:{CAT_COLOR};font-weight:700;">이렇게</span> 형광펜 강조. 3~5문장, 실용적 정보 위주]</p>
+</div>
+
+[[[AD_IN_ARTICLE]]]
+
+--- 5. 체크리스트 요약 박스 ---
+<div style="background:{CAT_LIGHT_BG};border-left:4px solid {CAT_COLOR};padding:20px 24px;border-radius:0 12px 12px 0;margin:32px 0;">
+  <p style="margin:0 0 10px 0;font-size:13px;font-weight:800;color:{CAT_COLOR};">한눈에 보는 체크리스트</p>
+  <ul style="margin:0;padding-left:18px;font-size:14px;color:#334155;line-height:2.0;">[섹션별 핵심 1줄씩 li 태그로 요약 — 섹션 개수만큼]</ul>
+</div>
+
+--- 6. 여행 준비물 (쿠팡 파트너스) ---
+{coupang_block}
+
+--- 7. 면책 조항 ---
+<div style="margin-top:2em;padding:20px 24px;background:#fafafa;border-radius:12px;border:1px solid #e2e8f0;">
+  <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#64748b;">안내</p>
+  <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.8;">본 콘텐츠는 정보 제공을 목적으로 작성되었으며, 실제 정책·요금·조건은 항공사·통신사·현지 기관 사정에 따라 달라질 수 있습니다. 예약·구매 전 공식 채널에서 최신 정보를 확인해 주세요.</p>
+</div>
+
+[[[AD_AUTORELAXED]]]
+
+{coupang_disclosure}
+
+[응답 형식 — 맨 끝에 순서대로 출력]
+[TITLE]
+- 형식: 【{year} {destination} 여행】 {topic} 관련 핵심주제 & 서브키워드 총정리! 형태 (트립닷컴 스타일)
+- 대괄호(【 】)로 연도+목적지를 감싸고, "총정리"/"완벽정리" 등으로 마무리
+- 40자 이내, 이모지 사용 금지
+[/TITLE]
+[COUNTRY_KR]{destination}이 속한 국가명을 한국어로 (도시명이면 그 도시가 속한 국가, 최대 6자)[/COUNTRY_KR]
+[FOCUS_KW]3~4단어 한국어 롱테일 키워드 (예: 일본 여행 준비물)[/FOCUS_KW]
+[META_DESC]130~155자 메타 설명[/META_DESC]
+[SLUG]{destination}과 주제를 반영한 3~6단어 영문 하이픈 슬러그[/SLUG]
+[EXCERPT]100~150자 발췌문[/EXCERPT]
+[SECTIONS]
+소제목|이미지검색영문키워드|섹션 한줄요약(체크리스트용)
+(위 형식으로 5~7줄, 본문 섹션 h2와 정확히 같은 순서·개수. 이미지검색영문키워드는 스톡사진 검색에 바로 쓸 수 있는 구체적 영문 키워드로 작성, 예: "japan passport visa document")
+[/SECTIONS]
+"""
+
+
+def _parse_checklist(raw: str, destination: str, topic: str) -> Dict:
+    def ex(tag: str, default: str = "") -> str:
+        m = re.search(rf'\[{tag}\](.*?)\[/{tag}\]', raw, re.DOTALL)
+        return m.group(1).strip() if m else default
+
+    body = raw
+    for tag in ["TITLE", "FOCUS_KW", "META_DESC", "SLUG", "EXCERPT", "COUNTRY_KR", "SECTIONS"]:
+        body = re.sub(rf'\[{tag}\].*?\[/{tag}\]\n?', '', body, flags=re.DOTALL)
+    body = re.sub(r'^```(?:html)?\s*\n?', '', body.strip(), flags=re.IGNORECASE)
+    body = re.sub(r'\n?```\s*$', '', body, flags=re.IGNORECASE)
+    body = body.strip()
+
+    body = re.sub(r'<a(?![^>]*\brel=)[^>]*>(.*?)</a>', r'\1', body, flags=re.DOTALL)
+    body = body.replace('[[[AD_DISPLAY]]]', AD_DISPLAY)
+    body = body.replace('[[[AD_IN_ARTICLE]]]', AD_IN_ARTICLE)
+    body = body.replace('[[[AD_AUTORELAXED]]]', AD_AUTORELAXED)
+
+    sections = []
+    for line in ex("SECTIONS").splitlines():
+        line = line.strip()
+        if not line or '|' not in line:
+            continue
+        parts = [p.strip() for p in line.split('|')]
+        if len(parts) >= 2 and parts[0] and parts[1]:
+            sections.append({
+                "heading": parts[0],
+                "query":   parts[1],
+                "summary": parts[2] if len(parts) > 2 else parts[0],
+            })
+
+    raw_title  = ex("TITLE", f"{destination} {topic} 총정리")
+    country_kr = ex("COUNTRY_KR", "").strip()
+    full_title = f"[{country_kr}] {raw_title}" if country_kr else raw_title
+    slug_base  = f"{destination}-{topic}".lower().replace(' ', '-').replace('·', '-')
+    slug_base  = re.sub(r'[^a-z0-9\-]', '', slug_base) or "travel-guide"
+
+    return {
+        "destination": destination,
+        "topic":       topic,
+        "title":       full_title,
+        "country_kr":  country_kr,
+        "focus_kw":    ex("FOCUS_KW",  f"{destination} {topic}"),
+        "meta_desc":   ex("META_DESC", f"{destination} {topic} 총정리. 꼭 필요한 정보만 정리했습니다."),
+        "slug":        ex("SLUG", slug_base[:80]),
+        "excerpt":     ex("EXCERPT", ""),
+        "sections":    sections,
+        "body":        body,
+    }
+
+
+def generate_checklist_content(destination: str, topic: str, continent: str = "") -> Dict:
+    with tracer.start_as_current_span("generate_checklist_content") as span:
+        span.set_attribute("destination", destination)
+        span.set_attribute("topic", topic)
+        prompt = build_checklist_prompt(destination, topic, continent)
+        for attempt in range(3):
+            try:
+                resp = gemini.generate_content(prompt)
+                raw  = resp.text
+                logger.info(f"Gemini 콘텐츠 생성 완료 ({len(raw)}자)")
+                return _parse_checklist(raw, destination, topic)
+            except Exception as e:
+                logger.warning(f"Gemini 호출 실패 ({attempt+1}/3): {e}")
+                if attempt < 2:
+                    time.sleep(15 * (attempt + 1))
+                else:
+                    raise
+
+
+# ==========================================
+# 8. 가이드북 스타일 추출 (구 스토리텔링형 파이프라인 — 현재 미사용, 참고용 보존)
 # ==========================================
 
 def fetch_guidebook_style(destination: str) -> str:
@@ -2649,7 +2917,128 @@ def send_telegram(msg: str):
 # ==========================================
 
 def run():
+    """실용정보/체크리스트형(trip.com 스타일) 자동 발행 파이프라인."""
     with tracer.start_as_current_span("run") as root:
+        t0 = datetime.now(timezone.utc)
+        logger.info("=== trip.bestwellth.org 자동화 시작 (실용정보 체크리스트형) ===")
+        send_telegram("trip.bestwellth.org 여행 블로그 자동화 시작")
+
+        # Step 1: 이미 발행된 목적지+주제 조합 수집 (중복 방지용)
+        published_set = wp_get_published_destinations()
+        continent = get_today_continent()
+        topics = fetch_practical_topics(published=published_set)
+
+        candidates = [
+            t for t in topics
+            if not is_topic_already_published(t["destination"], t["topic"], published_set)
+        ]
+        if not candidates:
+            logger.warning("모든 후보 조합이 이미 발행됨 — 중복 허용하고 전체 목록으로 진행")
+            candidates = topics
+
+        send_telegram(
+            f"오늘의 대륙: {continent}\n\n주제 후보:\n"
+            + "\n".join(f"{i}. {c['destination']} | {c['topic']}" for i, c in enumerate(candidates, 1))
+        )
+
+        chosen = candidates[0]
+        destination, topic = chosen["destination"], chosen["topic"]
+        root.set_attribute("destination", destination)
+        root.set_attribute("topic", topic)
+        root.set_attribute("continent", continent)
+
+        # Step 2: Gemini 콘텐츠 생성
+        try:
+            content = generate_checklist_content(destination, topic, continent)
+        except Exception as e:
+            send_telegram(f"자동화 실패: 콘텐츠 생성 {e}")
+            return
+
+        logger.info(f"제목: {content['title']}")
+
+        used_urls: set = set()
+        today = datetime.now().strftime("%Y%m%d")
+
+        # Step 3: 섹션별 이미지 — 소제목당 정확히 1장, Gemini가 준 영문 검색 키워드로 정밀 매칭
+        for idx, section in enumerate(content["sections"], start=1):
+            placeholder = f"{{PHOTO:section_{idx}}}"
+            if placeholder not in content["body"]:
+                continue
+            try:
+                img = fetch_travel_image(
+                    destination, orientation="landscape",
+                    query=section["query"], section="general", used_urls=used_urls,
+                )
+                if not img:
+                    img = fetch_travel_image(destination, orientation="landscape", used_urls=used_urls)
+                if img:
+                    try:
+                        img = crop_to_ratio(img, width=900, height=500)
+                    except Exception:
+                        pass
+                    fname = f"{destination.lower().replace(' ', '_')}_sec{idx}_{today}.jpg"
+                    media = wp_upload_image(img, fname, alt=f"{destination} {section['heading']}")
+                    if media and media.get("url"):
+                        html = (
+                            f'<figure style="margin:16px 0 20px;text-align:center;">'
+                            f'<img src="{media["url"]}" alt="{destination} {section["heading"]}" '
+                            f'style="width:100%;max-width:900px;height:auto;border-radius:12px;object-fit:cover;" />'
+                            f'</figure>'
+                        )
+                        content["body"] = content["body"].replace(placeholder, html)
+                        continue
+            except Exception as e:
+                logger.warning(f"섹션 이미지 실패 ({section['heading']}): {e}")
+            content["body"] = content["body"].replace(placeholder, "")
+
+        # Step 4: 대표(썸네일) 이미지 — 섹션과 중복되지 않는 별도 이미지
+        media_id = None
+        try:
+            featured_query = content["sections"][0]["query"] if content["sections"] else destination
+            featured_raw = fetch_travel_image(
+                destination, orientation="landscape",
+                query=featured_query, section="featured", used_urls=used_urls,
+            )
+            if featured_raw:
+                featured_crop = crop_to_ratio(featured_raw, width=1200, height=675)
+                fname = f"{destination.lower().replace(' ', '_')}_featured_{today}.jpg"
+                media_result = wp_upload_image(featured_crop, fname, alt=f"{destination} {topic}")
+                if media_result:
+                    media_id = media_result.get("id")
+        except Exception as e:
+            logger.warning(f"대표 이미지 실패: {e}")
+
+        # Step 5: 카테고리 (지역별 자동 분류)
+        region = classify_region(destination)
+        logger.info(f"지역 카테고리: {destination} → {region}")
+        cat_id = wp_get_or_create_category(region)
+
+        # Step 6: WordPress 발행
+        try:
+            wp_result = wp_publish(content, media_id, cat_id)
+            post_url = wp_result.get("link", "")
+        except Exception as e:
+            send_telegram(f"자동화 실패: WordPress 발행 {e}")
+            return
+
+        elapsed = int((datetime.now(timezone.utc) - t0).total_seconds())
+        summary = (
+            f"<b>trip.bestwellth.org 자동 발행 완료</b>\n\n"
+            f"대륙: {continent}\n"
+            f"주제: {destination} | {topic}\n"
+            f"제목: {content['title']}\n"
+            f"URL: {post_url}\n"
+            f"소요: {elapsed}초"
+        )
+        logger.info(summary.replace("<b>", "").replace("</b>", ""))
+        send_telegram(summary)
+        root.set_attribute("post_url", post_url)
+        root.set_attribute("elapsed_seconds", elapsed)
+
+
+def run_legacy_storytelling():
+    """구 스토리텔링형(게이트웨이 도시+특정 관광지) 파이프라인 — 현재 미사용, 참고/롤백용 보존."""
+    with tracer.start_as_current_span("run_legacy_storytelling") as root:
         t0 = datetime.now(timezone.utc)
         logger.info("=== trip.bestwellth.org 자동화 시작 ===")
         send_telegram("trip.bestwellth.org 여행 블로그 자동화 시작")
