@@ -2700,9 +2700,16 @@ def wp_upload_image(img_bytes: bytes, filename: str, alt: str = "") -> Optional[
     with tracer.start_as_current_span("wp_upload_image"):
         try:
             ext = "jpeg" if filename.endswith(".jpg") else "png"
+            # Content-Disposition 헤더는 latin-1만 허용 — 한글 등 비-ASCII 파일명(예: "페루_mid_...")이
+            # 그대로 들어가면 requests가 헤더 인코딩에 실패해 업로드 자체가 조용히 죽는다.
+            # 헤더용 파일명만 ASCII로 안전하게 치환하고(SEO에 영향 없음, alt_text는 별도 JSON 바디로 전송됨),
+            # 비-ASCII 문자가 사라져 알아볼 수 없게 되면 타임스탬프 기반 이름으로 대체한다.
+            safe_filename = re.sub(r'[^A-Za-z0-9_.\-]', '', filename)
+            if not safe_filename.strip('_.-'):
+                safe_filename = f"trip_{int(time.time())}.{ext if ext != 'jpeg' else 'jpg'}"
             headers = {
                 "Authorization": _wp_auth()["Authorization"],
-                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Disposition": f'attachment; filename="{safe_filename}"',
                 "Content-Type": f"image/{ext}",
             }
             r = requests.post(f"{WP_SITE_URL}/wp-json/wp/v2/media",
