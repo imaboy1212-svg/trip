@@ -4,16 +4,35 @@ on:
   workflow_dispatch:
 
 jobs:
-  trigger-pythonanywhere:
+  publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 30
 
     steps:
-      - name: PythonAnywhere 실행 트리거
-        run: |
-          curl -s -X POST \
-            "https://www.pythonanywhere.com/api/v0/user/${{ secrets.PA_USERNAME }}/consoles/" \
-            -H "Authorization: Token ${{ secrets.PA_API_TOKEN }}" \
-            -d "executable=bash" \
-            -d "arguments=-c 'cd ~/trip && git pull origin main && python main.py'"
-          echo "PythonAnywhere 실행 트리거 완료"
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 3.10 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: 패키지 설치
+        run: pip install -r requirements.txt
+
+      - name: 여행 블로그 자동 발행
+        env:
+          GEMINI_API_KEY:         ${{ secrets.GEMINI_API_KEY }}
+          UNSPLASH_ACCESS_KEY:    ${{ secrets.UNSPLASH_ACCESS_KEY }}
+          PEXELS_API_KEY:         ${{ secrets.PEXELS_API_KEY }}
+          WP_SITE_URL:            ${{ secrets.WP_SITE_URL }}
+          WP_USERNAME:            ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD:        ${{ secrets.WP_APP_PASSWORD }}
+          TELEGRAM_BOT_TOKEN:     ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:       ${{ secrets.TELEGRAM_CHAT_ID }}
+          PINTEREST_ACCESS_TOKEN: ${{ secrets.PINTEREST_ACCESS_TOKEN }}
+          PINTEREST_BOARD_ID:     ${{ secrets.PINTEREST_BOARD_ID }}
+          COUPANG_PARTNERS_URL:   ${{ secrets.COUPANG_PARTNERS_URL }}
+          OTLP_ENDPOINT:          ${{ secrets.OTLP_ENDPOINT }}
+        run: python main.py
