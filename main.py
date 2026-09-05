@@ -507,20 +507,6 @@ def fetch_practical_topics(published: Optional[set] = None) -> List[Dict[str, st
 
 def build_checklist_prompt(destination: str, topic: str, continent: str = "") -> str:
     year = datetime.now().year
-    coupang_block = "" if not COUPANG_LINK else (
-        f'<div style="margin:32px 0;padding:24px 28px;background:#fff7ed;'
-        f'border:1px solid #fed7aa;border-radius:16px;">'
-        f'<p style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#ea580c;letter-spacing:0.05em;">'
-        f'{destination} 여행 준비물</p>'
-        f'<p style="margin:0 0 16px 0;font-size:14px;color:#78350f;line-height:1.7;">'
-        f'출발 전 챙겨야 할 필수 아이템을 한곳에서 확인할 수 있습니다. '
-        f'캐리어·보조배터리·여행 파우치 등 여행에 꼭 필요한 준비물을 미리 점검하세요.</p>'
-        f'<a href="{COUPANG_LINK}" target="_blank" rel="nofollow sponsored" '
-        f'style="display:inline-block;background:#ea580c;color:#fff;font-size:14px;'
-        f'font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;">'
-        f'여행 필수템 보러가기</a>'
-        f'</div>'
-    )
     coupang_disclosure = "" if not COUPANG_LINK else (
         '<p style="margin-top:24px;font-size:12px;color:#94a3b8;text-align:center;line-height:1.8;">'
         '이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.</p>'
@@ -537,7 +523,7 @@ def build_checklist_prompt(destination: str, topic: str, continent: str = "") ->
 
 [문체]
 - 친근하고 캐주얼한 존댓말 ("~해요", "~하죠", "~해주세요")
-- 이모지는 문단당 최대 1개까지만 자연스럽게 사용 (과도한 사용 금지, 제목에는 사용하지 않음)
+- 이모지·아이콘·이모티콘 전면 사용 금지 (제목·본문 어디에도 넣지 않음)
 - 정보는 정확하고 실용적으로 — 지어낸 수치·금액 절대 금지
 - Markdown 기호(**, ##, -, *) 본문 삽입 금지
 
@@ -546,7 +532,14 @@ def build_checklist_prompt(destination: str, topic: str, continent: str = "") ->
 - 본문에 외부 링크(href 포함 a태그) 직접 삽입 금지
 - 불확실한 가격·정책을 단정적으로 서술 금지 — "항공사/현지 정책에 따라 다를 수 있다"는 식으로 안내
 - [SECTIONS] 태그의 소제목·개수는 본문 h2와 정확히 1:1 대응해야 함 (누락·추가 금지)
-- {{HOTEL_BUTTONS}}, {{TOUR_BUTTONS}}, {{PHOTO:section_N}} 같은 중괄호 두 겹({{ }}) 플레이스홀더는 절대 다른 텍스트로 바꾸거나 삭제하지 말고 그대로 출력할 것 (실제 예약 버튼·사진으로 자동 치환됨)
+- {{HOTEL_BUTTONS}}, {{TOUR_BUTTONS}}, {{COUPANG_BLOCK}}, {{PHOTO:section_N}} 같은 중괄호 두 겹({{ }}) 플레이스홀더는 절대 다른 텍스트로 바꾸거나 삭제하지 말고 그대로 출력할 것 (실제 예약 버튼·사진으로 자동 치환됨)
+
+[버튼 배치 지침 — 맥락에 맞게 분산 배치, 한곳에 몰아넣지 말 것]
+{{HOTEL_BUTTONS}}, {{TOUR_BUTTONS}}, {{COUPANG_BLOCK}} 3개는 아래 [SECTIONS] 본문 섹션들 중 각각 가장 문맥이 어울리는 섹션 하나를 골라 그 섹션의 <p> 문단 바로 뒤에 자연스럽게 삽입하세요. 절대 마지막에 한꺼번에 모아서 넣지 마세요.
+- {{HOTEL_BUTTONS}}: 숙소·호텔·체크인·숙박비 관련 내용을 다루는 섹션에 삽입. 그런 섹션이 없으면 가장 관련 있는 섹션 하나를 골라 삽입.
+- {{TOUR_BUTTONS}}: 입장권·투어·액티비티·현지 프로그램 예약 관련 내용을 다루는 섹션에 삽입.
+- {{COUPANG_BLOCK}}: 짐·캐리어·보조배터리 등 여행 준비물 관련 내용을 다루는 섹션에 삽입. 그런 섹션이 없으면 가장 관련 있는 섹션 하나를 골라 삽입.
+3개는 서로 다른 섹션에 분산시키고 (같은 섹션에 2개 이상 몰아넣지 말 것), 본문 전체에서 각각 정확히 1번씩만 등장해야 합니다.
 
 [HTML 구조 — 반드시 이 순서로]
 
@@ -555,7 +548,7 @@ def build_checklist_prompt(destination: str, topic: str, continent: str = "") ->
 --- 1. 카테고리 뱃지 ---
 <div style="display:inline-block;background:{CAT_LIGHT_BG};color:{CAT_COLOR};font-size:13px;font-weight:700;padding:4px 14px;border-radius:20px;margin-bottom:14px;">여행 준비 가이드 · {destination}</div>
 
---- 2. 인트로 (친근한 톤, 이모지 소량) ---
+--- 2. 인트로 (친근한 톤, 이모지·아이콘 없이) ---
 <p style="font-size:16px;color:#334155;line-height:1.9;margin-bottom:8px;">[{destination} 여행을 준비한다면 미리 챙겨야 할 것들을 정리해드릴게요. 이 주제가 왜 중요한지 2~3문장으로 자연스럽게 설명]</p>
 
 --- 3. 목차(TOC) 박스 ---
@@ -574,9 +567,11 @@ def build_checklist_prompt(destination: str, topic: str, continent: str = "") ->
   <h2 style="font-size:clamp(18px,3vw,21px);font-weight:800;color:#0f172a;margin:0 0 16px 0;">[소제목]</h2>
   {{PHOTO:section_N}}
   <p style="font-size:15px;color:#334155;line-height:1.9;margin-bottom:12px;">[본문 — 핵심 키워드는 <span style="background-color:{CAT_LIGHT_BG};padding:2px 6px;color:{CAT_COLOR};font-weight:700;">이렇게</span> 형광펜 강조. 3~5문장, 실용적 정보 위주]</p>
+  [이 섹션이 위 [버튼 배치 지침]에서 골라야 할 섹션에 해당한다면 여기, 마지막 문단 바로 뒤에 해당 플레이스홀더({{HOTEL_BUTTONS}} / {{TOUR_BUTTONS}} / {{COUPANG_BLOCK}} 중 하나)를 삽입. 해당 없으면 생략.]
 </div>
+(섹션 5~7개 중 정확히 3개 섹션에만 위 방식으로 플레이스홀더가 하나씩 들어가고, 나머지 섹션에는 들어가지 않음)
 
-[[[AD_IN_ARTICLE]]]
+전체 섹션 중 중간 지점(3~4번째 섹션 뒤)에 [[[AD_IN_ARTICLE]]]를 한 번 삽입할 것.
 
 --- 5. 체크리스트 요약 박스 ---
 <div style="background:{CAT_LIGHT_BG};border-left:4px solid {CAT_COLOR};padding:20px 24px;border-radius:0 12px 12px 0;margin:32px 0;">
@@ -584,26 +579,7 @@ def build_checklist_prompt(destination: str, topic: str, continent: str = "") ->
   <ul style="margin:0;padding-left:18px;font-size:14px;color:#334155;line-height:2.0;">[섹션별 핵심 1줄씩 li 태그로 요약 — 섹션 개수만큼]</ul>
 </div>
 
---- 6. 함께 준비하면 좋아요 (숙소 · 투어 · 준비물 예약 연계) ---
-<div style="margin:40px 0;padding-top:32px;border-top:1px solid #e2e8f0;">
-  <p style="margin:0 0 20px 0;font-size:16px;font-weight:800;color:#0f172a;">함께 준비하면 좋아요</p>
-
-  <div style="margin-bottom:24px;">
-    <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#334155;">{destination} 숙소 예약</p>
-    {{HOTEL_BUTTONS}}
-  </div>
-
-  <div style="margin-bottom:24px;">
-    {{TOUR_BUTTONS}}
-  </div>
-
-  <div>
-    <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#334155;">여행 준비물</p>
-    {coupang_block}
-  </div>
-</div>
-
---- 7. 면책 조항 ---
+--- 6. 면책 조항 ---
 <div style="margin-top:2em;padding:20px 24px;background:#fafafa;border-radius:12px;border:1px solid #e2e8f0;">
   <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#64748b;">안내</p>
   <p style="margin:0;font-size:13px;color:#94a3b8;line-height:1.8;">본 콘텐츠는 정보 제공을 목적으로 작성되었으며, 실제 정책·요금·조건은 항공사·통신사·현지 기관 사정에 따라 달라질 수 있습니다. 예약·구매 전 공식 채널에서 최신 정보를 확인해 주세요.</p>
@@ -644,9 +620,10 @@ def _parse_checklist(raw: str, destination: str, topic: str) -> Dict:
     body = body.strip()
 
     body = re.sub(r'<a(?![^>]*\brel=)[^>]*>(.*?)</a>', r'\1', body, flags=re.DOTALL)
-    body = body.replace('[[[AD_DISPLAY]]]', AD_DISPLAY)
-    body = body.replace('[[[AD_IN_ARTICLE]]]', AD_IN_ARTICLE)
-    body = body.replace('[[[AD_AUTORELAXED]]]', AD_AUTORELAXED)
+    # wpautop이 광고 스크립트를 깨뜨리지 않도록 wp:html 블록으로 감싼다
+    body = body.replace('[[[AD_DISPLAY]]]', f'<!-- wp:html -->{AD_DISPLAY}<!-- /wp:html -->')
+    body = body.replace('[[[AD_IN_ARTICLE]]]', f'<!-- wp:html -->{AD_IN_ARTICLE}<!-- /wp:html -->')
+    body = body.replace('[[[AD_AUTORELAXED]]]', f'<!-- wp:html -->{AD_AUTORELAXED}<!-- /wp:html -->')
 
     sections = []
     for line in ex("SECTIONS").splitlines():
@@ -2971,12 +2948,37 @@ def run():
 
         logger.info(f"제목: {content['title']}")
 
-        # Step 2.5: 숙소·투어 제휴 버튼 — 사이트가 이미 연동해 둔 Agoda/Expedia/Trip.com/Klook 링크를 재사용
+        # Step 2.5: 숙소·투어·준비물 제휴 링크 — 사이트가 이미 연동해 둔
+        # Agoda/Expedia/Trip.com/Klook/쿠팡파트너스 링크를 문맥에 맞는 섹션에 삽입.
+        # Gemini가 프롬프트 지시대로 각 섹션 안에 흩어 넣지만, 혹시 누락하면
+        # 끝에라도 반드시 노출되도록 fallback을 둔다.
         hotel_btns = build_hotel_buttons_custom(destination)
         top_tour = _get_top_tour(destination, content.get("meta_desc", topic))
         tour_btns = build_tour_buttons(destination, top_tour)
-        content["body"] = content["body"].replace("{HOTEL_BUTTONS}", hotel_btns)
-        content["body"] = content["body"].replace("{TOUR_BUTTONS}", tour_btns)
+        coupang_btn = "" if not COUPANG_LINK else (
+            f'<div style="margin:20px 0;padding:20px 24px;background:#fff7ed;'
+            f'border:1px solid #fed7aa;border-radius:16px;">'
+            f'<p style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#ea580c;letter-spacing:0.05em;">'
+            f'{destination} 여행 준비물</p>'
+            f'<p style="margin:0 0 16px 0;font-size:14px;color:#78350f;line-height:1.7;">'
+            f'출발 전 챙겨야 할 필수 아이템을 한곳에서 확인할 수 있습니다.</p>'
+            f'<a href="{COUPANG_LINK}" target="_blank" rel="nofollow sponsored" '
+            f'style="display:inline-block;background:#ea580c;color:#fff;font-size:14px;'
+            f'font-weight:700;padding:10px 22px;border-radius:8px;text-decoration:none;">'
+            f'여행 필수템 보러가기</a>'
+            f'</div>'
+        )
+
+        for placeholder, html_block in (
+            ("{HOTEL_BUTTONS}", hotel_btns),
+            ("{TOUR_BUTTONS}", tour_btns),
+            ("{COUPANG_BLOCK}", coupang_btn),
+        ):
+            if placeholder in content["body"]:
+                content["body"] = content["body"].replace(placeholder, html_block)
+            elif html_block:
+                # Gemini가 지침을 놓친 경우를 대비한 안전망 — 본문 끝에라도 반드시 노출
+                content["body"] += html_block
 
         used_urls: set = set()
         today = datetime.now().strftime("%Y%m%d")
