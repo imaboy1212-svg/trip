@@ -2959,19 +2959,26 @@ def run():
         used_urls: set = set()
         today = datetime.now().strftime("%Y%m%d")
 
+        _KEYWORD_STYLE = "margin-top:6px;font-size:12px;color:#94a3b8;text-align:center;"
+
+        def _keyword_caption(kw: str) -> str:
+            return f'<figcaption style="{_KEYWORD_STYLE}">{kw}</figcaption>'
+
         # Step 3: 섹션별 이미지 — 소제목당 정확히 1장, Gemini가 준 영문 검색 키워드로 정밀 매칭
+        # fetch_travel_image()는 (이미지 bytes, 매칭에 쓰인 검색어) 튜플을 반환한다.
         for idx, section in enumerate(content["sections"], start=1):
             placeholder = f"{{PHOTO:section_{idx}}}"
             if placeholder not in content["body"]:
                 continue
             try:
-                img = fetch_travel_image(
+                pair = fetch_travel_image(
                     destination, orientation="landscape",
                     query=section["query"], section="general", used_urls=used_urls,
                 )
-                if not img:
-                    img = fetch_travel_image(destination, orientation="landscape", used_urls=used_urls)
-                if img:
+                if not pair:
+                    pair = fetch_travel_image(destination, orientation="landscape", used_urls=used_urls)
+                if pair:
+                    img, kw = pair
                     try:
                         img = crop_to_ratio(img, width=900, height=500)
                     except Exception:
@@ -2983,6 +2990,7 @@ def run():
                             f'<figure style="margin:16px 0 20px;text-align:center;">'
                             f'<img src="{media["url"]}" alt="{destination} {section["heading"]}" '
                             f'style="width:100%;max-width:900px;height:auto;border-radius:12px;object-fit:cover;" />'
+                            f'{_keyword_caption(kw)}'
                             f'</figure>'
                         )
                         content["body"] = content["body"].replace(placeholder, html)
@@ -2995,11 +3003,12 @@ def run():
         media_id = None
         try:
             featured_query = content["sections"][0]["query"] if content["sections"] else destination
-            featured_raw = fetch_travel_image(
+            featured_pair = fetch_travel_image(
                 destination, orientation="landscape",
                 query=featured_query, section="featured", used_urls=used_urls,
             )
-            if featured_raw:
+            if featured_pair:
+                featured_raw, _ = featured_pair
                 featured_crop = crop_to_ratio(featured_raw, width=1200, height=675)
                 fname = f"{destination.lower().replace(' ', '_')}_featured_{today}.jpg"
                 media_result = wp_upload_image(featured_crop, fname, alt=f"{destination} {topic}")
