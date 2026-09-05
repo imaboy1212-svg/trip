@@ -546,6 +546,7 @@ def build_checklist_prompt(destination: str, topic: str, continent: str = "") ->
 - 본문에 외부 링크(href 포함 a태그) 직접 삽입 금지
 - 불확실한 가격·정책을 단정적으로 서술 금지 — "항공사/현지 정책에 따라 다를 수 있다"는 식으로 안내
 - [SECTIONS] 태그의 소제목·개수는 본문 h2와 정확히 1:1 대응해야 함 (누락·추가 금지)
+- {{HOTEL_BUTTONS}}, {{TOUR_BUTTONS}}, {{PHOTO:section_N}} 같은 중괄호 두 겹({{ }}) 플레이스홀더는 절대 다른 텍스트로 바꾸거나 삭제하지 말고 그대로 출력할 것 (실제 예약 버튼·사진으로 자동 치환됨)
 
 [HTML 구조 — 반드시 이 순서로]
 
@@ -565,8 +566,6 @@ def build_checklist_prompt(destination: str, topic: str, continent: str = "") ->
   </ul>
 </div>
 
-{coupang_block}
-
 [[[AD_DISPLAY]]]
 
 --- 4. 본문 섹션 (5~7개, [SECTIONS]와 1:1 정확히 대응) ---
@@ -585,8 +584,24 @@ def build_checklist_prompt(destination: str, topic: str, continent: str = "") ->
   <ul style="margin:0;padding-left:18px;font-size:14px;color:#334155;line-height:2.0;">[섹션별 핵심 1줄씩 li 태그로 요약 — 섹션 개수만큼]</ul>
 </div>
 
---- 6. 여행 준비물 (쿠팡 파트너스) ---
-{coupang_block}
+--- 6. 함께 준비하면 좋아요 (숙소 · 투어 · 준비물 예약 연계) ---
+<div style="margin:40px 0;padding-top:32px;border-top:1px solid #e2e8f0;">
+  <p style="margin:0 0 20px 0;font-size:16px;font-weight:800;color:#0f172a;">함께 준비하면 좋아요</p>
+
+  <div style="margin-bottom:24px;">
+    <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#334155;">{destination} 숙소 예약</p>
+    {{HOTEL_BUTTONS}}
+  </div>
+
+  <div style="margin-bottom:24px;">
+    {{TOUR_BUTTONS}}
+  </div>
+
+  <div>
+    <p style="margin:0 0 8px 0;font-size:13px;font-weight:700;color:#334155;">여행 준비물</p>
+    {coupang_block}
+  </div>
+</div>
 
 --- 7. 면책 조항 ---
 <div style="margin-top:2em;padding:20px 24px;background:#fafafa;border-radius:12px;border:1px solid #e2e8f0;">
@@ -2955,6 +2970,13 @@ def run():
             return
 
         logger.info(f"제목: {content['title']}")
+
+        # Step 2.5: 숙소·투어 제휴 버튼 — 사이트가 이미 연동해 둔 Agoda/Expedia/Trip.com/Klook 링크를 재사용
+        hotel_btns = build_hotel_buttons_custom(destination)
+        top_tour = _get_top_tour(destination, content.get("meta_desc", topic))
+        tour_btns = build_tour_buttons(destination, top_tour)
+        content["body"] = content["body"].replace("{HOTEL_BUTTONS}", hotel_btns)
+        content["body"] = content["body"].replace("{TOUR_BUTTONS}", tour_btns)
 
         used_urls: set = set()
         today = datetime.now().strftime("%Y%m%d")
