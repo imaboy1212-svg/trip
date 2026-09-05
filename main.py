@@ -2988,11 +2988,16 @@ def run():
         def _keyword_caption(kw: str) -> str:
             return f'<figcaption style="{_KEYWORD_STYLE}">{kw}</figcaption>'
 
-        # Step 3: 섹션별 이미지 — 소제목당 정확히 1장, Gemini가 준 영문 검색 키워드로 정밀 매칭
+        # Step 3: 중간 사진 1장만 — 전체 섹션 중 가운데 섹션에만 이미지를 넣고
+        # 나머지 섹션의 사진 플레이스홀더는 비워서 대표사진+중간사진 2장 구성으로 정리.
         # fetch_travel_image()는 (이미지 bytes, 매칭에 쓰인 검색어) 튜플을 반환한다.
+        mid_idx = (len(content["sections"]) + 1) // 2 if content["sections"] else 0
         for idx, section in enumerate(content["sections"], start=1):
             placeholder = f"{{PHOTO:section_{idx}}}"
             if placeholder not in content["body"]:
+                continue
+            if idx != mid_idx:
+                content["body"] = content["body"].replace(placeholder, "")
                 continue
             try:
                 pair = fetch_travel_image(
@@ -3007,7 +3012,7 @@ def run():
                         img = crop_to_ratio(img, width=900, height=500)
                     except Exception:
                         pass
-                    fname = f"{destination.lower().replace(' ', '_')}_sec{idx}_{today}.jpg"
+                    fname = f"{destination.lower().replace(' ', '_')}_mid_{today}.jpg"
                     media = wp_upload_image(img, fname, alt=f"{destination} {section['heading']}")
                     if media and media.get("url"):
                         html = (
@@ -3020,7 +3025,7 @@ def run():
                         content["body"] = content["body"].replace(placeholder, html)
                         continue
             except Exception as e:
-                logger.warning(f"섹션 이미지 실패 ({section['heading']}): {e}")
+                logger.warning(f"중간 사진 실패 ({section['heading']}): {e}")
             content["body"] = content["body"].replace(placeholder, "")
 
         # Step 4: 대표(썸네일) 이미지 — 섹션과 중복되지 않는 별도 이미지
