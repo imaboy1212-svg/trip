@@ -555,23 +555,24 @@ def build_checklist_prompt(destination: str, topic: str, continent: str = "") ->
 <div style="background:#f8fafc;padding:24px 28px;border-radius:16px;border:1px solid #e2e8f0;margin:24px 0 40px 0;">
   <p style="margin:0 0 14px 0;font-size:14px;font-weight:800;color:#0f172a;">목차</p>
   <ul style="list-style:none;padding:0;margin:0;">
-    [소제목 li 태그 5~7개 — 아래 [SECTIONS]와 정확히 동일한 순서·문구로 작성. 형식: <li style="font-size:14px;color:#334155;line-height:2.0;">— [소제목]</li>]
+    [소제목 li 태그 7~9개 — 아래 [SECTIONS]와 정확히 동일한 순서·문구로 작성. 형식: <li style="font-size:14px;color:#334155;line-height:2.0;">— [소제목]</li>]
   </ul>
 </div>
 
 [[[AD_DISPLAY]]]
 
---- 4. 본문 섹션 (5~7개, [SECTIONS]와 1:1 정확히 대응) ---
+--- 4. 본문 섹션 (7~9개, [SECTIONS]와 1:1 정확히 대응) ---
 아래 블록을 섹션 개수만큼 반복하되 {{PHOTO:section_N}}의 N은 1부터 순서대로 증가시킬 것:
 <div style="margin-bottom:44px;">
   <h2 style="font-size:clamp(18px,3vw,21px);font-weight:800;color:#0f172a;margin:0 0 16px 0;">[소제목]</h2>
   {{PHOTO:section_N}}
-  <p style="font-size:15px;color:#334155;line-height:1.9;margin-bottom:12px;">[본문 — 핵심 키워드는 <span style="background-color:{CAT_LIGHT_BG};padding:2px 6px;color:{CAT_COLOR};font-weight:700;">이렇게</span> 형광펜 강조. 3~5문장, 실용적 정보 위주]</p>
+  <p style="font-size:15px;color:#334155;line-height:1.9;margin-bottom:12px;">[본문 문단 1 — 핵심 키워드는 <span style="background-color:{CAT_LIGHT_BG};padding:2px 6px;color:{CAT_COLOR};font-weight:700;">이렇게</span> 형광펜 강조. 5~7문장, 배경·이유까지 충분히 설명]</p>
+  <p style="font-size:15px;color:#334155;line-height:1.9;margin-bottom:12px;">[본문 문단 2 — 구체적인 절차·수치·비교·주의사항 등 실용 정보를 더 깊이 있게. 5~7문장]</p>
   [이 섹션이 위 [버튼 배치 지침]에서 골라야 할 섹션에 해당한다면 여기, 마지막 문단 바로 뒤에 해당 플레이스홀더({{HOTEL_BUTTONS}} / {{TOUR_BUTTONS}} / {{COUPANG_BLOCK}} 중 하나)를 삽입. 해당 없으면 생략.]
 </div>
-(섹션 5~7개 중 정확히 3개 섹션에만 위 방식으로 플레이스홀더가 하나씩 들어가고, 나머지 섹션에는 들어가지 않음)
+(섹션 7~9개 중 정확히 3개 섹션에만 위 방식으로 플레이스홀더가 하나씩 들어가고, 나머지 섹션에는 들어가지 않음. 각 섹션은 반드시 2개 문단으로 구성해 얕지 않게 충분히 설명할 것 — 표면적인 요약이 아니라 실제로 도움이 되는 깊이의 정보를 담을 것)
 
-전체 섹션 중 중간 지점(3~4번째 섹션 뒤)에 [[[AD_IN_ARTICLE]]]를 한 번 삽입할 것.
+전체 섹션 중 중간 지점(4~5번째 섹션 뒤)에 [[[AD_IN_ARTICLE]]]를 한 번 삽입할 것.
 
 --- 5. 체크리스트 요약 박스 ---
 <div style="background:{CAT_LIGHT_BG};border-left:4px solid {CAT_COLOR};padding:20px 24px;border-radius:0 12px 12px 0;margin:32px 0;">
@@ -602,7 +603,7 @@ def build_checklist_prompt(destination: str, topic: str, continent: str = "") ->
 [EXCERPT]100~150자 발췌문[/EXCERPT]
 [SECTIONS]
 소제목|이미지검색영문키워드|섹션 한줄요약(체크리스트용)
-(위 형식으로 5~7줄, 본문 섹션 h2와 정확히 같은 순서·개수. 이미지검색영문키워드는 스톡사진 검색에 바로 쓸 수 있는 구체적 영문 키워드로 작성, 예: "japan passport visa document")
+(위 형식으로 7~9줄, 본문 섹션 h2와 정확히 같은 순서·개수. 이미지검색영문키워드는 스톡사진 검색에 바로 쓸 수 있는 구체적 영문 키워드로 작성, 예: "japan passport visa document")
 [/SECTIONS]
 """
 
