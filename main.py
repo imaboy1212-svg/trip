@@ -506,7 +506,6 @@ def fetch_practical_topics(published: Optional[set] = None) -> List[Dict[str, st
 
 
 def build_checklist_prompt(destination: str, topic: str, continent: str = "") -> str:
-    year = datetime.now().year
     coupang_disclosure = "" if not COUPANG_LINK else (
         '<p style="margin-top:24px;font-size:12px;color:#94a3b8;text-align:center;line-height:1.8;">'
         '이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.</p>'
@@ -592,8 +591,10 @@ def build_checklist_prompt(destination: str, topic: str, continent: str = "") ->
 
 [응답 형식 — 맨 끝에 순서대로 출력]
 [TITLE]
-- 형식: 【{year} {destination} 여행】 {topic} 관련 핵심주제 & 서브키워드 총정리! 형태 (트립닷컴 스타일)
-- 대괄호(【 】)로 연도+목적지를 감싸고, "총정리"/"완벽정리" 등으로 마무리
+- 형식: {destination} {topic} 관련 핵심주제 & 서브키워드 총정리! 형태
+- 【 】같은 대괄호로 연도·목적지를 감싸지 말 것 — "【2026 페루 여행】" 같은 접두사 금지. 목적지명은 문장 안에 자연스럽게만 녹여 쓸 것
+- 연도(2026 등) 자체도 제목에 넣지 말 것
+- "총정리"/"완벽정리" 등으로 마무리
 - 40자 이내, 이모지 사용 금지
 [/TITLE]
 [COUNTRY_KR]{destination}이 속한 국가명을 한국어로 (도시명이면 그 도시가 속한 국가, 최대 6자)[/COUNTRY_KR]
