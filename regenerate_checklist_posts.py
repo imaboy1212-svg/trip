@@ -12,7 +12,7 @@ from datetime import datetime
 from main import (
     generate_checklist_content, fetch_travel_image, crop_to_ratio,
     wp_upload_image, build_hotel_buttons_custom, build_tour_buttons,
-    _get_top_tour, classify_region, wp_get_or_create_category,
+    _get_top_tour, _section_heading_before, classify_region, wp_get_or_create_category,
     _wp_auth, WP_SITE_URL, COUPANG_LINK, send_telegram,
 )
 import requests
@@ -21,15 +21,14 @@ logger = logging.getLogger("regen")
 logging.basicConfig(level=logging.INFO)
 
 # (post_id, destination, topic, continent)
+# post_id를 None으로 두면 기존 글을 덮어쓰지 않고 새 글로 발행한다.
 TARGETS = [
-    (2690, "페루", "마추픽추 입장권 및 예약 방법", "South America"),
-    (2683, "페루", "항공권 & 호텔 예약 최적 시기 & 팁", "South America"),
-    (2706, "호주", "ETA 비자 신청 방법 및 준비물", "Oceania"),
-    (2710, "몰디브", "리조트 예약 및 선택 가이드", "Asia"),
+    (None, "일본", "교통패스(JR패스) 완벽정리", "Asia"),
 ]
 
 
-def wp_update_post(post_id: int, content: dict, media_id, cat_id):
+def wp_update_post(post_id, content: dict, media_id, cat_id):
+    """post_id가 있으면 그 글을 덮어쓰고, None이면 새 draft 글을 만든다."""
     payload = {
         "title": content["title"],
         "content": content["body"],
@@ -44,19 +43,26 @@ def wp_update_post(post_id: int, content: dict, media_id, cat_id):
         payload["featured_media"] = media_id
     if cat_id:
         payload["categories"] = [cat_id]
-    r = requests.post(f"{WP_SITE_URL}/wp-json/wp/v2/posts/{post_id}",
-                       headers=_wp_auth(), json=payload, timeout=30)
+    if post_id is None:
+        payload["status"] = "draft"
+        url = f"{WP_SITE_URL}/wp-json/wp/v2/posts"
+    else:
+        url = f"{WP_SITE_URL}/wp-json/wp/v2/posts/{post_id}"
+    r = requests.post(url, headers=_wp_auth(), json=payload, timeout=30)
     r.raise_for_status()
     return r.json()
 
 
-def regenerate_one(post_id: int, destination: str, topic: str, continent: str):
+def regenerate_one(post_id, destination: str, topic: str, continent: str):
     logger.info(f"=== {post_id} ({destination} | {topic}) 재생성 시작 ===")
     content = generate_checklist_content(destination, topic, continent)
 
     hotel_btns = build_hotel_buttons_custom(destination)
-    top_tour = _get_top_tour(destination, content.get("meta_desc", topic))
-    tour_btns = build_tour_buttons(destination, top_tour)
+    # 투어 버튼은 실제로 삽입되는 섹션의 구체적 주제(예: "JR 패스")를 문맥으로 사용
+    tour_context = _section_heading_before(content["body"], "{TOUR_BUTTONS}")
+    if not tour_context:
+        tour_context = _get_top_tour(destination, content.get("meta_desc", topic))
+    tour_btns = build_tour_buttons(destination, tour_context)
     coupang_btn = "" if not COUPANG_LINK else (
         f'<div style="margin:20px 0;padding:20px 24px;background:#fff7ed;'
         f'border:1px solid #fed7aa;border-radius:16px;">'

@@ -2009,6 +2009,20 @@ def build_hotel_buttons(destination: str) -> str:
     return f'<div style="{_BTN_WRAP}">{btns}</div>'
 
 
+def _section_heading_before(body: str, token: str) -> Optional[str]:
+    """token(플레이스홀더) 바로 앞에 나오는 가장 가까운 <h2>...</h2> 텍스트를 추출.
+    투어 버튼(Klook/Trip.com)이 실제로 삽입되는 섹션의 주제를 문맥으로 쓰기 위함
+    — destination 전체가 아니라 "JR 패스" 같은 그 섹션 고유의 주제명을 얻는다."""
+    idx = body.find(token)
+    if idx == -1:
+        return None
+    matches = list(re.finditer(r'<h2[^>]*>(.*?)</h2>', body[:idx], re.DOTALL))
+    if not matches:
+        return None
+    heading = re.sub(r'<[^>]+>', '', matches[-1].group(1)).strip()
+    return heading or None
+
+
 def build_hotel_buttons_custom(destination: str) -> str:
     """세시간전 제휴 링크 기반 맞춤형 숙소 CTA 버튼 (Agoda · Expedia · Trip.com)."""
     hotels = [
@@ -2046,10 +2060,12 @@ def _get_top_tour(destination: str, overview: str) -> str:
 
 
 def build_tour_buttons(destination: str, tour_name: str) -> str:
-    """세시간전 제휴 링크 기반 Klook 투어 버튼 + Trip.com 액티비티 버튼."""
+    """세시간전 제휴 링크 기반 Klook 투어 버튼 + Trip.com 액티비티 버튼.
+    tour_name에는 destination 전체가 아니라, 버튼이 실제로 삽입되는 섹션의
+    구체적 주제(예: "JR 패스")를 넘겨야 버튼 문구가 글의 맥락과 맞게 나온다."""
     entries = [
         (AFF_KLOOK, "#e85d04", "Klook",    f"{tour_name} 최저가 예약"),
-        (AFF_TRIP,  "#1a7abf", "Trip.com", f"{destination} 투어·액티비티 예약"),
+        (AFF_TRIP,  "#1a7abf", "Trip.com", f"{tour_name} 관련 상품 보기"),
     ]
     btns = "".join(
         f'<a href="{url}" target="_blank" rel="nofollow noopener sponsored" '
@@ -2962,8 +2978,12 @@ def run():
         # Gemini가 프롬프트 지시대로 각 섹션 안에 흩어 넣지만, 혹시 누락하면
         # 끝에라도 반드시 노출되도록 fallback을 둔다.
         hotel_btns = build_hotel_buttons_custom(destination)
-        top_tour = _get_top_tour(destination, content.get("meta_desc", topic))
-        tour_btns = build_tour_buttons(destination, top_tour)
+        # 투어 버튼은 목적지 전체의 "대표 투어"가 아니라, 실제로 삽입되는 섹션의
+        # 주제(예: "JR 패스")를 문맥으로 써야 글 내용과 버튼이 맞아떨어진다.
+        tour_context = _section_heading_before(content["body"], "{TOUR_BUTTONS}")
+        if not tour_context:
+            tour_context = _get_top_tour(destination, content.get("meta_desc", topic))
+        tour_btns = build_tour_buttons(destination, tour_context)
         coupang_btn = "" if not COUPANG_LINK else (
             f'<div style="margin:20px 0;padding:20px 24px;background:#fff7ed;'
             f'border:1px solid #fed7aa;border-radius:16px;">'
