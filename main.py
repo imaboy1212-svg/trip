@@ -432,13 +432,19 @@ _PRACTICAL_TOPIC_TYPES = [
 ]
 
 _PRACTICAL_DEST_POOL: Dict[str, List[str]] = {
-    "Asia": ["일본", "태국", "베트남", "대만", "필리핀", "싱가포르", "말레이시아", "발리"],
-    "Europe": ["프랑스", "이탈리아", "스페인", "영국", "스위스", "체코", "그리스", "포르투갈"],
-    "North America": ["미국", "캐나다", "멕시코"],
-    "South America": ["페루", "브라질", "아르헨티나"],
-    "Africa": ["모로코", "이집트", "남아프리카공화국"],
-    "Oceania": ["호주", "뉴질랜드", "괌", "사이판"],
-    "Special Destinations": ["몰디브", "두바이", "터키", "아이슬란드"],
+    "Asia": ["일본", "태국", "베트남", "대만", "필리핀", "싱가포르", "말레이시아", "발리",
+             "캄보디아", "라오스", "중국", "홍콩", "마카오", "몽골", "네팔", "스리랑카"],
+    "Europe": ["프랑스", "이탈리아", "스페인", "영국", "스위스", "체코", "그리스", "포르투갈",
+               "독일", "네덜란드", "오스트리아", "헝가리", "크로아티아", "아이슬란드",
+               "핀란드", "스웨덴", "노르웨이", "폴란드", "아일랜드"],
+    "North America": ["미국", "캐나다", "멕시코", "쿠바", "코스타리카", "자메이카", "파나마"],
+    "South America": ["페루", "브라질", "아르헨티나", "칠레", "콜롬비아", "볼리비아",
+                       "에콰도르", "우루과이"],
+    "Africa": ["모로코", "이집트", "남아프리카공화국", "케냐", "탄자니아", "튀니지",
+               "에티오피아", "세이셸", "모리셔스"],
+    "Oceania": ["호주", "뉴질랜드", "괌", "사이판", "피지", "팔라우"],
+    "Special Destinations": ["몰디브", "두바이", "터키", "인도", "요르단", "이스라엘",
+                              "카타르", "사우디아라비아", "조지아", "우즈베키스탄"],
 }
 
 
@@ -447,6 +453,34 @@ def is_topic_already_published(destination: str, topic: str, published: set) -> 
     dest_lower = destination.lower()
     topic_key = topic.split(" ")[0].lower()
     return any(dest_lower in item and topic_key in item for item in published)
+
+
+def _recent_destinations(limit: int = 15) -> List[str]:
+    """최근 작성된 글의 목적지명을 최신순으로 추출 (국가 다양성 확보용).
+    제목이 '[국가] ...' 형식이라는 점을 이용해 국가명만 뽑는다."""
+    try:
+        r = requests.get(
+            f"{WP_SITE_URL}/wp-json/wp/v2/posts",
+            headers=_wp_auth(),
+            params={"per_page": limit, "orderby": "date", "order": "desc",
+                    "status": "publish,draft", "_fields": "title"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        posts = r.json()
+        seen: List[str] = []
+        for p in posts:
+            title_raw = p.get("title", {})
+            title = title_raw.get("rendered", "") if isinstance(title_raw, dict) else str(title_raw)
+            m = re.match(r'^\[([^\]]+)\]', title)
+            if m:
+                dest = m.group(1).strip()
+                if dest and dest not in seen:
+                    seen.append(dest)
+        return seen
+    except Exception as e:
+        logger.warning(f"최근 목적지 조회 실패: {e}")
+        return []
 
 
 def fetch_practical_topics(published: Optional[set] = None) -> List[Dict[str, str]]:
@@ -459,19 +493,25 @@ def fetch_practical_topics(published: Optional[set] = None) -> List[Dict[str, st
         span.set_attribute("continent", continent)
         pool = _PRACTICAL_DEST_POOL.get(continent, [])
         published_list = ", ".join(list(published)[:30]) if published else "없음"
+        recent_destinations = _recent_destinations(limit=15)
+        recent_str = ", ".join(recent_destinations) if recent_destinations else "없음"
+        span.set_attribute("recent_destinations", recent_str)
 
         prompt = (
             f"당신은 한국 여행객을 대상으로 하는 여행 콘텐츠 전략가입니다.\n\n"
             f"오늘의 대륙: {continent}\n"
             f"후보 목적지 풀: {', '.join(pool)}\n"
-            f"이미 다룬 '목적지+주제' 조합 (반드시 피할 것): {published_list}\n\n"
+            f"최근에 다룬 목적지 (최신순 — 국가 다양성을 위해 이번에는 선택하지 말 것): {recent_str}\n"
+            f"이미 다룬 정확한 '목적지+주제' 조합 (다시 만들면 안 됨): {published_list}\n\n"
             f"6개의 '목적지 | 실용주제' 조합을 선정하세요.\n\n"
             f"규칙:\n"
+            f"- 목적지 다양성이 최우선이다: 위 '최근에 다룬 목적지' 목록에 있는 나라는 이번엔 고르지 말고, "
+            f"후보 목적지 풀 중 최근에 다루지 않은 나라를 우선 선택할 것\n"
+            f"- 6개 목적지는 서로 전부 달라야 한다 (같은 나라를 두 번 고르지 말 것)\n"
             f"- 목적지: 한국인이 실제로 많이 검색하는 나라 또는 대표 도시 (예: 일본, 태국, 발리, 파리)\n"
             f"- 실용주제: 여행 '준비 과정'에서 실제로 검색하는 실무 정보 하나. "
             f"예시: 여행 준비물, 유심·이심, 여행자보험, 항공권&호텔 예약, 입장권&근처 명소, 현지교통&패스, 환전&카드\n"
-            f"- 스토리텔링/관광 소개가 아니라 '검색하면 바로 답을 얻고 싶은' 실용 정보여야 함\n"
-            f"- 이미 다룬 조합은 피하고, 같은 목적지라도 다른 주제면 사용 가능\n\n"
+            f"- 스토리텔링/관광 소개가 아니라 '검색하면 바로 답을 얻고 싶은' 실용 정보여야 함\n\n"
             f"6줄, 한 줄에 하나씩 '목적지 | 실용주제' 형식으로만 답하세요."
         )
 
@@ -2763,8 +2803,10 @@ def wp_get_or_create_category(name: str) -> Optional[int]:
         return None
 
 
-def wp_get_published_destinations() -> set:
-    """이미 발행된 포스트의 슬러그·제목을 수집해 중복 여행지 탐지에 사용합니다."""
+def wp_get_published_destinations(status: str = "publish,draft") -> set:
+    """이미 발행/작성된 포스트의 슬러그·제목을 수집해 중복 여행지 탐지에 사용합니다.
+    기본값이 draft도 포함하는 이유: 이 사이트는 검토 전까지 글을 계속 draft로
+    쌓아두는 운영 방식이라, publish만 보면 대부분 0건이라 중복 방지가 무력화된다."""
     collected: set = set()
     page = 1
     while True:
@@ -2772,7 +2814,7 @@ def wp_get_published_destinations() -> set:
             r = requests.get(
                 f"{WP_SITE_URL}/wp-json/wp/v2/posts",
                 headers=_wp_auth(),
-                params={"per_page": 100, "page": page, "status": "publish", "_fields": "slug,title"},
+                params={"per_page": 100, "page": page, "status": status, "_fields": "slug,title"},
                 timeout=15,
             )
             if r.status_code in (400, 404):
