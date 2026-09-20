@@ -457,7 +457,13 @@ def is_topic_already_published(destination: str, topic: str, published: set) -> 
 
 def _recent_destinations(limit: int = 15) -> List[str]:
     """최근 작성된 글의 목적지명을 최신순으로 추출 (국가 다양성 확보용).
-    제목이 '[국가] ...' 형식이라는 점을 이용해 국가명만 뽑는다."""
+    제목에 "[국가]" 접두사를 더 이상 쓰지 않으므로, 후보 목적지 풀에 있는
+    국가명이 제목 맨 앞부분에 나오는지로 판별한다 (TITLE 지시사항이 항상
+    destination으로 문장을 시작하도록 하고 있어 신뢰할 수 있는 방법)."""
+    all_countries = sorted(
+        {d for pool in _PRACTICAL_DEST_POOL.values() for d in pool},
+        key=len, reverse=True,  # 긴 이름부터 매칭해 부분 문자열 오탐 방지
+    )
     try:
         r = requests.get(
             f"{WP_SITE_URL}/wp-json/wp/v2/posts",
@@ -472,11 +478,13 @@ def _recent_destinations(limit: int = 15) -> List[str]:
         for p in posts:
             title_raw = p.get("title", {})
             title = title_raw.get("rendered", "") if isinstance(title_raw, dict) else str(title_raw)
-            m = re.match(r'^\[([^\]]+)\]', title)
-            if m:
-                dest = m.group(1).strip()
-                if dest and dest not in seen:
-                    seen.append(dest)
+            title = re.sub(r'^\[[^\]]+\]\s*', '', title)  # 과거 "[국가]" 접두사가 남아있는 글도 지원
+            head = title[:20]
+            for country in all_countries:
+                if head.startswith(country) or country in head:
+                    if country not in seen:
+                        seen.append(country)
+                    break
         return seen
     except Exception as e:
         logger.warning(f"최근 목적지 조회 실패: {e}")
@@ -682,7 +690,9 @@ def _parse_checklist(raw: str, destination: str, topic: str) -> Dict:
 
     raw_title  = ex("TITLE", f"{destination} {topic} 총정리")
     country_kr = ex("COUNTRY_KR", "").strip()
-    full_title = f"[{country_kr}] {raw_title}" if country_kr else raw_title
+    # 제목 자체가 이미 {destination}으로 시작하도록 지시했으므로 "[국가] " 접두사를
+    # 따로 붙이면 "[일본] 일본 교통패스..." 처럼 중복 표기가 된다. 붙이지 않는다.
+    full_title = raw_title
     slug_base  = f"{destination}-{topic}".lower().replace(' ', '-').replace('·', '-')
     slug_base  = re.sub(r'[^a-z0-9\-]', '', slug_base) or "travel-guide"
 
